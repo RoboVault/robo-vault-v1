@@ -75,7 +75,7 @@ contract vault {
     uint256  lpPooled = 0;
     uint256  tokensBorrowed = 0;
 
-    IERC20  base = IERC20(USDC);
+    IERC20 base = IERC20(USDC);
     IERC20 short_token = IERC20(WFTM);
     IERC20 lp = IERC20(LP_spirit);
     IERC20 lp_harvest_token = IERC20(SpiritLP); 
@@ -87,12 +87,10 @@ contract vault {
 
     
     constructor() public  {
-        
         Icomptroller comptroller = Icomptroller(comptrollerAddress);
         address[] memory cTokens = new address[](1);
         cTokens[0] = 0x328A7b4d538A2b3942653a9983fdA3C12c571141; 
         comptroller.enterMarkets(cTokens);
-        
     }
     
 

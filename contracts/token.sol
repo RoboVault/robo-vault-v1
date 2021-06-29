@@ -135,7 +135,7 @@ contract rvUSDC is ERC20, ERC20Detailed, ReentrancyGuard, Ownable, vault {
     }
     
     // No rebalance implementation for lower fees and faster swaps
-    function withdraw(uint256 _shares) external nonReentrant
+    function withdraw(uint256 _shares) public nonReentrant
     {
       require(_shares > 0, "withdraw must be greater than 0");
     
@@ -156,6 +156,11 @@ contract rvUSDC is ERC20, ERC20Detailed, ReentrancyGuard, Ownable, vault {
     
       IERC20(base).safeTransfer(msg.sender, r);
       pool = calcPoolValueInToken();
+    }
+    
+    function withdrawAll() external
+    {
+        withdraw(balanceOf(msg.sender));
     }
     
     function _withdrawSome(uint256 _amount) public {
@@ -239,8 +244,8 @@ contract rvUSDC is ERC20, ERC20Detailed, ReentrancyGuard, Ownable, vault {
         uint256 bal = calcPoolValueInToken();
         uint256 supply = totalSupply();
         return bal.div(supply);
-        
     }
+
     /*
     function removeShortPosition() internal {
           
