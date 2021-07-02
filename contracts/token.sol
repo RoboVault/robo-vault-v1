@@ -1,7 +1,7 @@
 pragma solidity ^0.5.0;
 
 
-import "./vaultFtm.sol";
+import "./vaultUSDC.sol";
 import "./vaultHelpers.sol";
 
 
@@ -9,8 +9,6 @@ import "./vaultHelpers.sol";
 contract rvUSDC is ERC20, ERC20Detailed, ReentrancyGuard, Ownable, vault {
     using SafeERC20 for IERC20;
     using SafeMath for uint256;
-    
-    
     
     address public strategist;
     address public keeper;
@@ -68,6 +66,11 @@ contract rvUSDC is ERC20, ERC20Detailed, ReentrancyGuard, Ownable, vault {
    
     }
     
+    function _calcWithdrawalFee(uint256 _r) internal returns(uint256) {
+        uint256 fee = _r.mul(5).div(1000);
+        return (fee);
+        
+    }
     
 
 
@@ -122,7 +125,7 @@ contract rvUSDC is ERC20, ERC20Detailed, ReentrancyGuard, Ownable, vault {
     function withdraw(uint256 _shares) public nonReentrant
     {
       require(_shares > 0, "withdraw must be greater than 0");
-    
+      
       uint256 ibalance = balanceOf(msg.sender);
       require(_shares <= ibalance, "insufficient balance");
     
@@ -135,6 +138,9 @@ contract rvUSDC is ERC20, ERC20Detailed, ReentrancyGuard, Ownable, vault {
       // Check balance
       uint256 b = IERC20(base).balanceOf(address(this));
       if (b < r) {
+        /// take withdrawal fee for removing from strat 
+        uint256 fee = _calcWithdrawalFee(r);
+        r = r.sub(fee);
         _withdrawSome(r);
       }
     
@@ -142,31 +148,16 @@ contract rvUSDC is ERC20, ERC20Detailed, ReentrancyGuard, Ownable, vault {
       pool = calcPoolValueInToken();
     }
     
-    function withdrawAll() public nonReentrant
-    {
-      uint256 ibalance = balanceOf(msg.sender);
-      require(ibalance > 0, "withdraw must be greater than 0");
-      uint256 _shares = ibalance; 
+    function withdrawAll() public {
+        uint256 ibalance = balanceOf(msg.sender);
+        withdraw(ibalance);
+        
+    }
 
-      // Could have over value from cTokens
-      pool = calcPoolValueInToken();
-      // Calc to redeem before updating balances
-      uint256 r = (pool.mul(_shares)).div(totalSupply());
-      _burn(msg.sender, _shares);
-    
-      // Check balance
-      uint256 b = IERC20(base).balanceOf(address(this));
-      if (b < r) {
-        _withdrawSome(r);
-      }
-    
-      IERC20(base).safeTransfer(msg.sender, r);
-      pool = calcPoolValueInToken();
-    }
     
     function _withdrawSome(uint256 _amount) internal {
         require(_amount < calcPoolValueInToken());
-        uint256 amt_from_lp = _amount.sub(base.balanceOf(address(this))).mul(borrowAllocation).div(50); 
+        uint256 amt_from_lp = (_amount.sub(base.balanceOf(address(this)))).mul(borrowAllocation).div(50); 
         uint256 lpValue = balanceLp(); 
         uint256 lpPooled = countLpPooled();
         uint256 lpUnpooled =  lp.balanceOf(address(this)); 
