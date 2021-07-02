@@ -37,6 +37,7 @@ interface FARM {
     /// placeholder -> contract for farming 
     function deposit(uint256 _pid, uint256 _amount) external; /// deposit LP into farm -> call deposit with _amount = 0 to harvest LP 
     function withdraw(uint256 _pid, uint256 _amount) external; /// withdraw LP from farm
+    function userInfo(uint256 _pid, address user) external view returns (uint); 
 }
 
 interface EXCHANGE {
@@ -72,7 +73,6 @@ contract vault {
     
     
     uint256  pid  =  4; /// spirit = 4 / spooky = 2 ; 
-    uint256  lpPooled = 0;
     uint256  tokensBorrowed = 0;
 
     IERC20 base = IERC20(USDC);
@@ -91,6 +91,7 @@ contract vault {
         address[] memory cTokens = new address[](1);
         cTokens[0] = 0x328A7b4d538A2b3942653a9983fdA3C12c571141; 
         comptroller.enterMarkets(cTokens);
+        
     }
     
 
@@ -106,10 +107,33 @@ contract vault {
         return (baseInWallet + collateral +  lpvalue - debtShort + shortInWallet) ; 
 
     }
+
+    function calcDebtRatio() public view returns(uint256){
+        uint256 debtShort = balanceDebt();
+        uint256 lpvalue = balanceLp();
+        uint256 debtRatio = debtShort.div(lpvalue.div(2)).mul(100); 
+        return (debtRatio);
+    }
+
+    function calcCollateral() public view returns(uint256){
+        uint256 debtShort = balanceDebt();
+        uint256 collateral = balanceLend();
+        uint256 collatRatio = debtShort.mul(100).div(collateral); 
+        return (collatRatio);
+    }
+
+    function calcFreeCash() public view returns(uint256){
+        uint256 bal = base.balanceOf(address(this)); 
+        uint256 totalBal = calcPoolValueInToken();
+        uint256 freeCashRatio = bal.mul(100).div(totalBal);
+        return (freeCashRatio); 
+    }
+
     /// get value of all LP in base currency
     function balanceLp() public view returns(uint256) {
         uint256 baseLP = _get_base_in_lp();
         uint256 lpIssued = lp.totalSupply();
+        uint256 lpPooled = countLpPooled();
         uint256 totalLP = lpPooled + lp.balanceOf(address(this));
         uint256 lpvalue = totalLP.mul(baseLP).div(lpIssued).mul(2);
         return(lpvalue);
@@ -169,18 +193,7 @@ contract vault {
         return (borrowamount);
         
     }
-    /*
-    function borrow_amt(uint256 borrowAmount) public {
-        require(msg.sender == owner, 'only admin');
-        BORROW(borrow_platform).borrow(borrowAmount);
-        tokensBorrowed += borrowAmount;
-        
-    }
-    
-    
-    
-    
-    */
+
 
     function _borrow(uint256 borrowAmount) internal {
         BORROW(borrow_platform).borrow(borrowAmount);
@@ -226,24 +239,17 @@ contract vault {
     function _redeem_base(uint256 _redeem_amount) public {
         LEND(lend_platform).redeemUnderlying(_redeem_amount); 
     }
-    
-    /*
-    function _withdraw_base(uint256 _withdraw_amount) external {
-        require(msg.sender == owner, 'only admin');
-        base.approve(owner, _withdraw_amount);
-        base.transfer(owner, _withdraw_amount); 
+
+    function countLpPooled() public view returns(uint256){
+        uint256 lpPooled = FARM(farm).userInfo(pid, address(this));
+        return lpPooled;
     }
     
-    function _harvest() internal {
-        FARM(farm).deposit(pid, 0);
-    }
-    
-    */
-    /// convert LP to base token -> used when user wants to withdraw base 
     
     function _withdrawLpRebalance(uint256 _amount) public {
         uint256 lpValue = balanceLp(); 
         uint256 lpUnpooled =  lp.balanceOf(address(this)); 
+        uint256 lpPooled = countLpPooled();
         uint256 lpCount = lpUnpooled.add(lpPooled);
         uint256 lpReq = _amount.mul(lpCount).div(balanceLp()); 
         uint256 lpWithdraw;
@@ -261,6 +267,7 @@ contract vault {
     function _withdrawLpRebalanceCollateral(uint256 _amount) public {
         uint256 lpValue = balanceLp(); 
         uint256 lpUnpooled =  lp.balanceOf(address(this)); 
+        uint256 lpPooled = countLpPooled();
         uint256 lpCount = lpUnpooled.add(lpPooled);
         uint256 lpReq = _amount.mul(lpCount).div(balanceLp()); 
         uint256 lpWithdraw;
@@ -287,24 +294,17 @@ contract vault {
         ROUTER(routerAddress).addLiquidity(address(short_token), address(base), amountADesired, amountBDesired, amountAMin, amountBMin, address(this), block.timestamp + 15); /// add liquidity 
     }
     
-    function depoistLp() public {
-        uint256 lp_balance = lp.balanceOf(address(this)); /// get number of LP tokens
-        lp.approve(address(farm), lp_balance);
-        FARM(farm).deposit(pid, lp_balance); /// deposit LP tokens to farm
-        lpPooled += lp_balance; /// update balance for number of LP tokens in Farm 
-    }
-    
     function _depoistLp() internal {
         uint256 lp_balance = lp.balanceOf(address(this)); /// get number of LP tokens
         lp.approve(address(farm), lp_balance);
         FARM(farm).deposit(pid, lp_balance); /// deposit LP tokens to farm
-        lpPooled += lp_balance; /// update balance for number of LP tokens in Farm 
+        ///lpPooled += lp_balance; /// update balance for number of LP tokens in Farm 
     }
 
     function _withdrawSomeLp(uint256 _amount) public {
-        require(_amount <= lpPooled);
+        require(_amount <= countLpPooled());
         FARM(farm).withdraw(pid, _amount);
-        lpPooled -= _amount; 
+        ///lpPooled -= _amount; 
     }
     
     function _removeAllLp() public {
@@ -329,32 +329,13 @@ contract vault {
     
     function _withdrawAllPooled() public {
         ///require(msg.sender == owner, 'only admin'); 
+        uint256 lpPooled = countLpPooled();
         FARM(farm).withdraw(pid, lpPooled);
-        lpPooled = 0; 
     }
     
-    function harvest_strat() public {
-        
-        /// harvest from farm & based on amt borrowed vs LP value either -> repay some debt or add to collateral
-        FARM(farm).deposit(pid, 0);
-        uint256 shortPos = balanceDebt();
-        uint256 lpPos = balanceLp();
-        if (lpPos.div(2) > shortPos){
-            /// more 
-            uint256 lend_add = _sell_harvest_base();
-            _lendBase(lend_add); 
-            
-        } else {
-            _sell_harvest_short(); 
-            _repay_debt();
-        }
-        
-    }
-        
+      
     
-    function countLpPooled() public view returns(uint256){
-        return lpPooled;
-    }
+
     
     function _sell_harvest_base() public returns (uint256) {
         address[] memory pathBase = new address[](3);
