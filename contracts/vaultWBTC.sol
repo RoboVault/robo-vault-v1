@@ -50,11 +50,11 @@ contract vault {
     using SafeMath for uint256;
     
     /// base token specific info
-    address  USDC = 0x04068DA6C83AFCFA0e13ba15A6696662335D5B75;
-    address  lend_platform = 0x328A7b4d538A2b3942653a9983fdA3C12c571141; // platform for addding base token as collateral
-    address  LP = 0xe7E90f5a767406efF87Fdad7EB07ef407922EC1D; /// LP contract for base & short token
-    uint256  pid  =  4; 
-    IERC20 base = IERC20(USDC);
+    address  WBTC = 0x321162Cd933E2Be498Cd2267a90534A804051b11;
+    address  lend_platform = 0x20CA53E2395FA571798623F1cFBD11Fe2C114c24; // platform for addding base token as collateral
+    address  LP = 0x279b2c897737a50405ED2091694F225D83F2D3bA; /// LP contract for wbtc & wftm 
+    uint256  pid  =  2; 
+    IERC20 base = IERC20(WBTC);
     
     address  WFTM = 0x21be370D5312f44cB42ce377BC9b8a0cEF1A4C83;
     address  borrow_platform = 0xd528697008aC67A21818751A5e3c58C8daE54696;
@@ -76,7 +76,7 @@ contract vault {
     constructor() public  {
         Icomptroller comptroller = Icomptroller(comptrollerAddress);
         address[] memory cTokens = new address[](1);
-        cTokens[0] = 0x328A7b4d538A2b3942653a9983fdA3C12c571141; 
+        cTokens[0] = 0x20CA53E2395FA571798623F1cFBD11Fe2C114c24; 
         comptroller.enterMarkets(cTokens);
         
     }
