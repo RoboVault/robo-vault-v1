@@ -38,6 +38,7 @@ interface FARM {
     function deposit(uint256 _pid, uint256 _amount) external; /// deposit LP into farm -> call deposit with _amount = 0 to harvest LP 
     function withdraw(uint256 _pid, uint256 _amount) external; /// withdraw LP from farm
     function userInfo(uint256 _pid, address user) external view returns (uint); 
+    function pendingSpirit(uint256 _pid, address _user) external view returns (uint256);
 }
 
 interface EXCHANGE {
@@ -91,8 +92,9 @@ contract vault {
         uint256 baseInWallet = balanceBase();
         uint256 debtShort = balanceDebt();
         uint256 shortInWallet = balanceShortBaseEq(); 
+        uint256 pendingRewards = balancePendingHarvest();
 
-        return (baseInWallet + collateral +  lpvalue - debtShort + shortInWallet) ; 
+        return (baseInWallet + collateral +  lpvalue - debtShort + shortInWallet + pendingRewards) ; 
 
     }
     // debt ratio - used to trigger rebalancing of debt 
@@ -135,6 +137,19 @@ contract vault {
         return (debtShort.mul(baseLP).div(shortLP));
         
     }
+    
+    function balancePendingHarvest() public view returns(uint256){
+        uint256 rewardsPending = FARM(farm).pendingSpirt(pid, address(this));
+        uint256 harvestLP_A = _getHarvestInHarvestLp();
+        uint256 shortLP_A = _getShortInHarvestLp();
+        uint256 shortLP_B = _getShortInLp();
+        uint256 baseLP_B = getBaseInLp();
+        uint256 balShort = harvestBalance.mul(shortLP_A).div(harvestLP_A);
+        uint256 balRewards = balShort.mul(baseLP_B).div(shortLP_B);
+        return (balRewards);
+        
+    }
+    
     // reserves 
     function balanceBase() public view returns(uint256){
         return (base.balanceOf(address(this)));
