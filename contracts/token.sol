@@ -75,26 +75,26 @@ contract rvUSDC is ERC20, ERC20Detailed, ReentrancyGuard, Ownable, vault {
 
 
     
-    function deploy_strat() external {
+    function deployStrat() external {
         _onlyKeepers();
         ///require(msg.sender == owner, 'only admin');
         uint256 bal = base.balanceOf(address(this)); 
         uint256 totalBal = calcPoolValueInToken();
         uint256 freeCash = totalBal.mul(freeCashAllocation).div(100);
         if (bal > freeCash){
-            _deploy_capital(bal.sub(freeCash));
+            _deployCapital(bal.sub(freeCash));
         }
         
     }
         
-    function _deploy_capital(uint256 _amount) internal {
+    function _deployCapital(uint256 _amount) internal {
         ///require(msg.sender == owner, 'only admin');
         ///uint256 bal = base.balanceOf(address(this)); 
         uint256 lendDeposit = lendAllocation.mul(_amount).div(100);
         _lendBase(lendDeposit); 
-        uint256 borrow_amt_base = borrowAllocation.mul(_amount).div(100); 
-        uint256 borrow_amt = _borrow_base_eq(borrow_amt_base);
-        _add_to_LP(borrow_amt);
+        uint256 borrowAmtBase = borrowAllocation.mul(_amount).div(100); 
+        uint256 borrowAmt = _borrowBaseEq(borrowAmtBase);
+        _addToLP(borrowAmt);
         _depoistLp();
     }
     
@@ -171,9 +171,9 @@ contract rvUSDC is ERC20, ERC20Detailed, ReentrancyGuard, Ownable, vault {
         }
         _withdrawSomeLp(lpWithdraw);
         _removeAllLp(); 
-        _repay_debt(); 
+        _repayDebt(); 
         uint256 redeemAmount = _amount - base.balanceOf(address(this)); 
-        _redeem_base(redeemAmount);
+        _redeemBase(redeemAmount);
     }
     
 
@@ -197,9 +197,9 @@ contract rvUSDC is ERC20, ERC20Detailed, ReentrancyGuard, Ownable, vault {
         
         if (collatRat < collatLower) {
             uint256 adjAmount = (lendPos.mul(collatTarget).div(100).sub(shortPos)).div(100+collatTarget).mul(100);
-            uint256 borrow_amt = _borrow_base_eq(adjAmount);
-            _redeem_base(adjAmount);
-            _add_to_LP(borrow_amt);
+            uint256 borrowAmt = _borrowBaseEq(adjAmount);
+            _redeemBase(adjAmount);
+            _addToLP(borrowAmt);
             _depoistLp();
         }
 
@@ -214,10 +214,10 @@ contract rvUSDC is ERC20, ERC20Detailed, ReentrancyGuard, Ownable, vault {
       if (lpPos.div(2) > shortPos.mul(100 + debtBuffer).div(100)){
             /// amount of short token in LP is greater than amount borrowed -> 
             /// action = borrow more short token swap half for base token and add to LP + farm
-            uint256 borrow_amt_base = lpPos - shortPos.mul(2);
-            uint256 borrow_amt = _borrow_base_eq(borrow_amt_base);
-            _swap_short_for_base(borrow_amt.div(2));
-            _add_to_LP(borrow_amt.div(2));
+            uint256 borrowAmtBase = lpPos - shortPos.mul(2);
+            uint256 borrowAmt = _borrowBaseEq(borrowAmtBase);
+            _swapShortBase(borrowAmt.div(2));
+            _addToLP(borrowAmt.div(2));
             _depoistLp();
     
     
@@ -244,17 +244,17 @@ contract rvUSDC is ERC20, ERC20Detailed, ReentrancyGuard, Ownable, vault {
         
         if (calcDebtRatio() < 100){
             /// more 
-            uint256 lend_add = _sell_harvest_base();
-            uint256 fee = lend_add.mul(harvestFee).div(100);
+            uint256 lendAdd = _sellHarvestBase();
+            uint256 fee = lendAdd.mul(harvestFee).div(100);
             base.safeTransfer(strategist, fee);
 
-            _lendBase(lend_add.sub(fee)); 
+            _lendBase(lendAdd.sub(fee)); 
             
         } else {
-            _sell_harvest_short(); 
-            uint256 fee = short_token.balanceOf(address(this)).mul(harvestFee).div(100);
-            short_token.safeTransfer(strategist, fee);
-            _repay_debt();
+            _sellHarvestShort(); 
+            uint256 fee = shortToken.balanceOf(address(this)).mul(harvestFee).div(100);
+            shortToken.safeTransfer(strategist, fee);
+            _repayDebt();
         }
         
     }
@@ -274,15 +274,15 @@ contract rvUSDC is ERC20, ERC20Detailed, ReentrancyGuard, Ownable, vault {
         _onlyAuthorized();
         _withdrawAllPooled();
         _removeAllLp();
-        _repay_debt(); 
+        _repayDebt(); 
         
         if (balanceDebt() > 0){
-            _swap_base_for_short(balanceDebt());
-            _repay_debt();
+            _swapBaseShort(balanceDebt());
+            _repayDebt();
             /// still some debt to repay afetr removing LP 
             
         } else {
-            _swap_short_for_base(short_token.balanceOf(address(this))); 
+            _swapShortBase(shortToken.balanceOf(address(this))); 
         }
     }
     
