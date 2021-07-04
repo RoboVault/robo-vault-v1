@@ -51,7 +51,7 @@ contract vault {
     
     /// base token specific info
     address  WBTC = 0x321162Cd933E2Be498Cd2267a90534A804051b11;
-    address  lend_platform = 0x20CA53E2395FA571798623F1cFBD11Fe2C114c24; // platform for addding base token as collateral
+    address  lendPlatform = 0x20CA53E2395FA571798623F1cFBD11Fe2C114c24; // platform for addding base token as collateral
     address  LP = 0x279b2c897737a50405ED2091694F225D83F2D3bA; /// LP contract for wbtc & wftm 
     uint256  pid  =  2; 
     IERC20 base = IERC20(WBTC);
@@ -70,7 +70,7 @@ contract vault {
     IERC20 lp = IERC20(LP);
     IERC20 lp_harvestToken = IERC20(SpiritLP); 
     IERC20 harvestToken = IERC20(Spirit);
-    IERC20 lend_tokens = IERC20(lend_platform);
+    IERC20 lend_tokens = IERC20(lendPlatform);
 
     
     constructor() public  {
@@ -150,12 +150,12 @@ contract vault {
     
     function balanceLend() public view returns(uint256){
         uint256 b = lend_tokens.balanceOf(address(this));
-        return (b.mul(LEND(lend_platform).exchangeRateStored()).div(1e18));
+        return (b.mul(LEND(lendPlatform).exchangeRateStored()).div(1e18));
     }
     
     function _lendBase(uint256 amount) internal {
-        base.approve(address(lend_platform), amount);
-        LEND(lend_platform).mint(amount);
+        base.approve(address(lendPlatform), amount);
+        LEND(lendPlatform).mint(amount);
         /// baselent += amount;
     }
     
@@ -221,7 +221,7 @@ contract vault {
     }
     
     function _redeemBase(uint256 _redeem_amount) public {
-        LEND(lend_platform).redeemUnderlying(_redeem_amount); 
+        LEND(lendPlatform).redeemUnderlying(_redeem_amount); 
     }
 
     function countLpPooled() public view returns(uint256){

@@ -26,7 +26,8 @@ contract rvUSDC is ERC20, ERC20Detailed, ReentrancyGuard, Ownable, vault {
     uint256 collatUpper = 50; 
     uint256 collatTarget = 42 ;
     uint256 collatLower = 35;  
-    uint256 debtBuffer = 3; /// buffer of % difference between debt position and LP before rebalance
+    uint256 debtUpper = 103;
+    uint256 debtLower = 97; 
     uint256 harvestFee = 5;
 
     event UpdatedStrategist(address newStrategist);
@@ -44,19 +45,47 @@ contract rvUSDC is ERC20, ERC20Detailed, ReentrancyGuard, Ownable, vault {
                 msg.sender == owner()
         );
     }
-
+    
+    /// before withdrawing from strat check there is enough liquidity in lending protocal 
+    function _liquidityCheck(uint256 _amount) internal {
+        uint256 lendBal = getBaseInLending();
+        require(lendBal > _amount, "CREAM Currently has insufficent liquidity of base token to complete withdrawal.");
+        
+        
+    }
+    
+    /// update strategist -> this is the address that receives fees + can complete rebalancing and update strategy thresholds
+    /// strategist can also exit leveraged position i.e. withdraw all pooled LP and repay outstanding debt 
     function setStrategist(address _strategist) external {
         _onlyAuthorized();
         require(_strategist != address(0));
         strategist = _strategist;
         emit UpdatedStrategist(_strategist);
     }
-
+    /// keeper has ability to copmlete rebalancing functions & also deploy capital to strategy once reserves exceed some threshold
     function setKeeper(address _keeper) external {
         _onlyAuthorized();
         require(_keeper != address(0));
         keeper = _keeper;
         emit UpdatedKeeper(_keeper);
+    }
+    
+    function setDebtThresholds(uint256 _lower, uint256 _upper) external {
+        _onlyAuthorized();
+        require(_lower < 100);
+        require(_upper > 100);
+        debtUpper = _upper;
+        debtLower = _lower;
+    }
+    
+    function setCollateralThresholds(uint256 _lower, uint256 _upper, uint256 _target) external {
+        _onlyAuthorized();
+        require(75 > _upper);
+        require(_upper > _target);
+        require(_target > _lower);
+        collatUpper = _upper; 
+        collatTarget = _target ;
+        collatLower = _lower;
     }
     
 
@@ -65,7 +94,7 @@ contract rvUSDC is ERC20, ERC20Detailed, ReentrancyGuard, Ownable, vault {
 
    
     }
-    
+    /// this is the withdrawl fee when user withdrawal results in removal of funds from strategy (i.e. withdrawal in excess of reserves)
     function _calcWithdrawalFee(uint256 _r) internal returns(uint256) {
         uint256 fee = _r.mul(5).div(1000);
         return (fee);
@@ -74,7 +103,7 @@ contract rvUSDC is ERC20, ERC20Detailed, ReentrancyGuard, Ownable, vault {
     
 
 
-    
+    /// function to deploy funds when reserves exceed some threshold
     function deployStrat() external {
         _onlyKeepers();
         ///require(msg.sender == owner, 'only admin');
@@ -86,7 +115,7 @@ contract rvUSDC is ERC20, ERC20Detailed, ReentrancyGuard, Ownable, vault {
         }
         
     }
-        
+    /// deploy assets according to vault strategy    
     function _deployCapital(uint256 _amount) internal {
         ///require(msg.sender == owner, 'only admin');
         ///uint256 bal = base.balanceOf(address(this)); 
@@ -94,14 +123,12 @@ contract rvUSDC is ERC20, ERC20Detailed, ReentrancyGuard, Ownable, vault {
         _lendBase(lendDeposit); 
         uint256 borrowAmtBase = borrowAllocation.mul(_amount).div(100); 
         uint256 borrowAmt = _borrowBaseEq(borrowAmtBase);
-        _addToLP(borrowAmt);
-        _depoistLp();
+        //_addToLP(borrowAmt);
+        //_depoistLp();
     }
     
-    function approveBase(uint256 _amount) external {
-        IERC20(base).approve(address(this), _amount);
-    }
 
+    // user deposits token to vault in exchange for pool shares which can later be redeemed for assets + accumulated yield
     function deposit(uint256 _amount) external nonReentrant
     {
       require(_amount > 0, "deposit must be greater than 0");
@@ -141,7 +168,7 @@ contract rvUSDC is ERC20, ERC20Detailed, ReentrancyGuard, Ownable, vault {
         /// take withdrawal fee for removing from strat 
         uint256 fee = _calcWithdrawalFee(r);
         r = r.sub(fee);
-        _withdrawSome(r);
+        _withdrawSome(r.sub(b));
       }
     
       IERC20(base).safeTransfer(msg.sender, r);
@@ -154,10 +181,12 @@ contract rvUSDC is ERC20, ERC20Detailed, ReentrancyGuard, Ownable, vault {
         
     }
 
-    
+    /// function to remove funds from strategy when users withdraws funds in excess of reserves 
     function _withdrawSome(uint256 _amount) internal {
         require(_amount < calcPoolValueInToken());
-        uint256 amt_from_lp = (_amount.sub(base.balanceOf(address(this)))).mul(borrowAllocation).div(50); 
+        uint256 amt_from_lp = _amount.mul(borrowAllocation).div(50); 
+        uint256 amt_from_lend = _amount.sub(amt_from_lp);
+        _liquidityCheck(amt_from_lend);
         uint256 lpValue = balanceLp(); 
         uint256 lpPooled = countLpPooled();
         uint256 lpUnpooled =  lp.balanceOf(address(this)); 
@@ -175,6 +204,7 @@ contract rvUSDC is ERC20, ERC20Detailed, ReentrancyGuard, Ownable, vault {
         uint256 redeemAmount = _amount - base.balanceOf(address(this)); 
         _redeemBase(redeemAmount);
     }
+
     
 
     /// below function will rebalance collateral to within target range
@@ -211,7 +241,7 @@ contract rvUSDC is ERC20, ERC20Detailed, ReentrancyGuard, Ownable, vault {
       uint256 shortPos = balanceDebt(); 
       uint256 lpPos = balanceLp();
       
-      if (lpPos.div(2) > shortPos.mul(100 + debtBuffer).div(100)){
+      if (calcDebtRatio() < debtLower){
             /// amount of short token in LP is greater than amount borrowed -> 
             /// action = borrow more short token swap half for base token and add to LP + farm
             uint256 borrowAmtBase = lpPos - shortPos.mul(2);
@@ -223,7 +253,7 @@ contract rvUSDC is ERC20, ERC20Detailed, ReentrancyGuard, Ownable, vault {
     
       }
       
-      if (lpPos.div(2) < shortPos.mul(100 - debtBuffer).div(100)){
+      if (calcDebtRatio() > debtUpper){
             /// amount of short token in LP is less than amount borrowed -> 
             /// action = remove some LP -> repay debt + add base token to collateral 
             uint256 baseValueAdj = shortPos.mul(2) - lpPos;
@@ -233,14 +263,14 @@ contract rvUSDC is ERC20, ERC20Detailed, ReentrancyGuard, Ownable, vault {
     
       
     }
-
+    
+    /// called by keeper to harvest rewards and either repay debt or add to reserves 
     function harvest_strat() external {
         
         /// harvest from farm & based on amt borrowed vs LP value either -> repay some debt or add to collateral
         _onlyKeepers();
         FARM(farm).deposit(pid, 0);
         uint256 shortPos = balanceDebt();
-        uint256 lpPos = balanceLp();
         
         if (calcDebtRatio() < 100){
             /// more 
@@ -248,7 +278,7 @@ contract rvUSDC is ERC20, ERC20Detailed, ReentrancyGuard, Ownable, vault {
             uint256 fee = lendAdd.mul(harvestFee).div(100);
             base.safeTransfer(strategist, fee);
 
-            _lendBase(lendAdd.sub(fee)); 
+            //_lendBase(lendAdd.sub(fee)); 
             
         } else {
             _sellHarvestShort(); 
@@ -267,25 +297,35 @@ contract rvUSDC is ERC20, ERC20Detailed, ReentrancyGuard, Ownable, vault {
 
     
 
-    
-    function removeShortPosition() external {
-          
-        /// withdraws all LP from farm -> converts to tokens -> repays debt -> if still outstanding debt converts some of base token to short token & repays -> 
-        _onlyAuthorized();
+    // remove all of Vaults LP tokens and repay debt meaning vault only holds base token (in lending + reserves)
+    function exitLeveragePosition() internal {
         _withdrawAllPooled();
         _removeAllLp();
+        _sellHarvestBase();
         _repayDebt(); 
         
         if (balanceDebt() > 0){
-            _swapBaseShort(balanceDebt());
+            uint256 debtOutstanding = BORROW(borrow_platform).borrowBalanceStored(address(this));
+            _swapBaseShortExact(debtOutstanding);
             _repayDebt();
-            /// still some debt to repay afetr removing LP 
-            
+
         } else {
             _swapShortBase(shortToken.balanceOf(address(this))); 
         }
     }
+    // exits all positions so vault only holds base token
+    function exitPositionsAll() external {
+        _onlyAuthorized();
+        exitLeveragePosition();
+        _redeemBase(balanceLend());
+    }
     
+    // exits leverage position and moves all funds to lending protocal
+    function exitPositionsLP() external {
+        _onlyAuthorized();
+        exitLeveragePosition();
+        _lendBase(base.balanceOf(address(this)));
+    }
     
 
 }
