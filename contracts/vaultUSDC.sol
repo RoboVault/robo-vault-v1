@@ -11,7 +11,6 @@ interface LEND {
     function exchangeRateCurrent() external view returns (uint256);
     function exchangeRateStored() external view returns (uint);
     function getCash() external view returns (uint);
-    
     function balanceOfUnderlying(address) external view returns (uint256);
 }
 
@@ -170,7 +169,7 @@ contract vault {
         return (b.mul(LEND(lendPlatform).exchangeRateStored()).div(1e18));
     }
     // lend base tokens to lending platform 
-    function _lendBase(uint256 amount) internal {
+    function _lendBase(uint256 amount) public {
         base.approve(address(lendPlatform), amount);
         LEND(lendPlatform).mint(amount);
         /// baselent += amount;
@@ -180,7 +179,7 @@ contract vault {
 
     
     // borrow tokens woth _amount of base tokens 
-    function _borrowBaseEq(uint256 _amount) internal returns(uint256) {
+    function _borrowBaseEq(uint256 _amount) public returns(uint256) {
         ///uint256 bal = base.balanceOf(address(this));
         uint256 shortLP = _getShortInLp();
         uint256 baseLP = getBaseInLp();
@@ -191,7 +190,7 @@ contract vault {
     }
 
 
-    function _borrow(uint256 borrowAmount) internal {
+    function _borrow(uint256 borrowAmount) public {
         BORROW(borrow_platform).borrow(borrowAmount);
 
     }
