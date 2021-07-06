@@ -184,7 +184,7 @@ contract rvUSDC is ERC20, ERC20Detailed, ReentrancyGuard, Ownable, vault {
     /// function to remove funds from strategy when users withdraws funds in excess of reserves 
     function _withdrawSome(uint256 _amount) internal {
         require(_amount < calcPoolValueInToken());
-        uint256 amt_from_lp = _amount.mul(borrowAllocation).div(50); 
+        uint256 amt_from_lp = _amount.mul(calcBorrowAllocation()).div(50); 
         uint256 amt_from_lend = _amount.sub(amt_from_lp);
         _liquidityCheck(amt_from_lend);
         uint256 lpValue = balanceLp(); 
@@ -301,7 +301,6 @@ contract rvUSDC is ERC20, ERC20Detailed, ReentrancyGuard, Ownable, vault {
     function exitLeveragePosition() internal {
         _withdrawAllPooled();
         _removeAllLp();
-        _sellHarvestBase();
         _repayDebt(); 
         
         if (balanceDebt() > 0){

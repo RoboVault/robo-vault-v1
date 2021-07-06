@@ -210,6 +210,14 @@ contract vault {
         }
     }
     
+    function calcBorrowAllocation() public view returns (uint256){
+        uint256 balLend = balanceLend();
+        uint256 balDebt = balanceDebt(); 
+        uint256 borrowAllocation = balDebt.mul(100).div(balLend.add(balDebt));
+        return (borrowAllocation)
+        
+    }
+    
     function _getShortInLp() public view returns (uint256) {
         uint256 short_lp = shortToken.balanceOf(address(lp)) ; 
         return (short_lp);          
@@ -284,7 +292,7 @@ contract vault {
         _withdrawSomeLp(lpWithdraw);
         _removeAllLp(); 
         
-        if (_amount.div(2) > base.balanceOf(address(this))){
+        if (_amount.div(2) <= base.balanceOf(address(this))){
             _lendBase(_amount.div(2));
         } else {
             _lendBase(base.balanceOf(address(this)));
