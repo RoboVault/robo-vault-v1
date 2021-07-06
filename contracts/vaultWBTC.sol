@@ -98,7 +98,7 @@ contract vault {
     function calcDebtRatio() public view returns(uint256){
         uint256 debtShort = balanceDebt();
         uint256 lpvalue = balanceLp();
-        uint256 debtRatio = debtShort.div(lpvalue.div(2)).mul(100); 
+        uint256 debtRatio = debtShort.mul(200).div(lpvalue); 
         return (debtRatio);
     }
 
