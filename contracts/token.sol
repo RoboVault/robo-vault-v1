@@ -123,8 +123,8 @@ contract rvUSDC is ERC20, ERC20Detailed, ReentrancyGuard, Ownable, vault {
         _lendBase(lendDeposit); 
         uint256 borrowAmtBase = borrowAllocation.mul(_amount).div(100); 
         uint256 borrowAmt = _borrowBaseEq(borrowAmtBase);
-        //_addToLP(borrowAmt);
-        //_depoistLp();
+        _addToLP(borrowAmt);
+        _depoistLp();
     }
     
 
