@@ -138,12 +138,12 @@ contract vault {
     }
     
     function balancePendingHarvest() public view returns(uint256){
-        uint256 rewardsPending = FARM(farm).pendingSpirt(pid, address(this));
+        uint256 rewardsPending = FARM(farm).pendingSpirit(pid, address(this));
         uint256 harvestLP_A = _getHarvestInHarvestLp();
         uint256 shortLP_A = _getShortInHarvestLp();
         uint256 shortLP_B = _getShortInLp();
         uint256 baseLP_B = getBaseInLp();
-        uint256 balShort = harvestBalance.mul(shortLP_A).div(harvestLP_A);
+        uint256 balShort = rewardsPending.mul(shortLP_A).div(harvestLP_A);
         uint256 balRewards = balShort.mul(baseLP_B).div(shortLP_B);
         return (balRewards);
         
@@ -213,7 +213,7 @@ contract vault {
         uint256 balLend = balanceLend();
         uint256 balDebt = balanceDebt(); 
         uint256 borrowAllocation = balDebt.mul(100).div(balLend.add(balDebt));
-        return (borrowAllocation)
+        return (borrowAllocation);
         
     }
     
