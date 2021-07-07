@@ -16,19 +16,21 @@ contract rvUSDC is ERC20, ERC20Detailed, ReentrancyGuard, Ownable, vault {
     
     uint256 public pool;
     
+
     
-    uint256 lendAllocation = 70;
-    uint256 borrowAllocation = 30; 
+    uint256 lendAllocation = 700000;
+    uint256 borrowAllocation = 300000; 
     
     /// free cash held in base currency as % for speedy withdrawals 
-    uint256 freeCashAllocation = 5; 
+    uint256 freeCashAllocation = 50000; 
     /// upper, target and lower bounds for ratio of debt to collateral 
-    uint256 collatUpper = 50; 
-    uint256 collatTarget = 42 ;
-    uint256 collatLower = 35;  
-    uint256 debtUpper = 103;
-    uint256 debtLower = 97; 
-    uint256 harvestFee = 5;
+    uint256 collatUpper = 500000; 
+    uint256 collatTarget = 420000;
+    uint256 collatLower = 350000;  
+    uint256 debtUpper = 1030000;
+    uint256 debtLower = 970000; 
+    uint256 harvestFee = 50000;
+    uint256 withdrawalFee = 5000; /// only applies when funds are removed from strat & not reserves
 
     event UpdatedStrategist(address newStrategist);
     event UpdatedKeeper(address newKeeper);
@@ -54,6 +56,29 @@ contract rvUSDC is ERC20, ERC20Detailed, ReentrancyGuard, Ownable, vault {
         
     }
     
+    function approveContracts() external {
+        _onlyAuthorized();
+        base.safeApprove(address(lendPlatform), uint256(-1));
+        shortToken.safeApprove(address(borrow_platform), uint256(-1));
+        base.safeApprove(routerAddress, uint256(-1));
+        shortToken.safeApprove(routerAddress, uint256(-1));
+        harvestToken.safeApprove(routerAddress, uint256(-1));
+        lp.safeApprove(routerAddress, uint256(-1));
+        lp.approve(address(farm), uint256(-1));
+    }
+        
+    function resetApprovals( ) external {
+        _onlyAuthorized();
+        base.safeApprove(address(lendPlatform), 0);
+        shortToken.safeApprove(address(borrow_platform), 0);
+        base.safeApprove(routerAddress, 0);
+        shortToken.safeApprove(routerAddress, 0);
+        harvestToken.safeApprove(routerAddress, 0);
+        lp.safeApprove(routerAddress, 0);
+
+        
+    }
+    
     /// update strategist -> this is the address that receives fees + can complete rebalancing and update strategy thresholds
     /// strategist can also exit leveraged position i.e. withdraw all pooled LP and repay outstanding debt 
     function setStrategist(address _strategist) external {
@@ -72,15 +97,15 @@ contract rvUSDC is ERC20, ERC20Detailed, ReentrancyGuard, Ownable, vault {
     
     function setDebtThresholds(uint256 _lower, uint256 _upper) external {
         _onlyAuthorized();
-        require(_lower < 100);
-        require(_upper > 100);
+        require(_lower < decimalAdj);
+        require(_upper > decimalAdj);
         debtUpper = _upper;
         debtLower = _lower;
     }
     
     function setCollateralThresholds(uint256 _lower, uint256 _upper, uint256 _target) external {
         _onlyAuthorized();
-        require(75 > _upper);
+        require(750000 > _upper);
         require(_upper > _target);
         require(_target > _lower);
         collatUpper = _upper; 
@@ -96,7 +121,7 @@ contract rvUSDC is ERC20, ERC20Detailed, ReentrancyGuard, Ownable, vault {
     }
     /// this is the withdrawl fee when user withdrawal results in removal of funds from strategy (i.e. withdrawal in excess of reserves)
     function _calcWithdrawalFee(uint256 _r) internal returns(uint256) {
-        uint256 fee = _r.mul(5).div(1000);
+        uint256 fee = _r.mul(withdrawalFee).div(decimalAdj);
         return (fee);
         
     }
@@ -109,7 +134,7 @@ contract rvUSDC is ERC20, ERC20Detailed, ReentrancyGuard, Ownable, vault {
         ///require(msg.sender == owner, 'only admin');
         uint256 bal = base.balanceOf(address(this)); 
         uint256 totalBal = calcPoolValueInToken();
-        uint256 freeCash = totalBal.mul(freeCashAllocation).div(100);
+        uint256 freeCash = totalBal.mul(freeCashAllocation).div(decimalAdj);
         if (bal > freeCash){
             _deployCapital(bal.sub(freeCash));
         }
@@ -119,9 +144,9 @@ contract rvUSDC is ERC20, ERC20Detailed, ReentrancyGuard, Ownable, vault {
     function _deployCapital(uint256 _amount) internal {
         ///require(msg.sender == owner, 'only admin');
         ///uint256 bal = base.balanceOf(address(this)); 
-        uint256 lendDeposit = lendAllocation.mul(_amount).div(100);
+        uint256 lendDeposit = lendAllocation.mul(_amount).div(decimalAdj);
         _lendBase(lendDeposit); 
-        uint256 borrowAmtBase = borrowAllocation.mul(_amount).div(100); 
+        uint256 borrowAmtBase = borrowAllocation.mul(_amount).div(decimalAdj); 
         uint256 borrowAmt = _borrowBaseEq(borrowAmtBase);
         _addToLP(borrowAmt);
         _depoistLp();
@@ -139,7 +164,7 @@ contract rvUSDC is ERC20, ERC20Detailed, ReentrancyGuard, Ownable, vault {
       // Calculate pool shares
       uint256 shares = 0;
       if (pool == 0) {
-        shares = _amount.div(100);
+        shares = _amount;
         pool = _amount;
       } else {
         shares = (_amount.mul(totalSupply())).div(pool);
@@ -184,7 +209,7 @@ contract rvUSDC is ERC20, ERC20Detailed, ReentrancyGuard, Ownable, vault {
     /// function to remove funds from strategy when users withdraws funds in excess of reserves 
     function _withdrawSome(uint256 _amount) public {
         require(_amount < calcPoolValueInToken());
-        uint256 amt_from_lp = _amount.mul(calcBorrowAllocation()).div(50); 
+        uint256 amt_from_lp = _amount.mul(calcBorrowAllocation()).mul(2).div(decimalAdj); 
         uint256 amt_from_lend = _amount.sub(amt_from_lp);
         _liquidityCheck(amt_from_lend);
         uint256 lpValue = balanceLp(); 
@@ -216,17 +241,17 @@ contract rvUSDC is ERC20, ERC20Detailed, ReentrancyGuard, Ownable, vault {
         uint256 lpBal = balanceLp(); 
         
         /// ratio of amount borrowed to collateral 
-        uint256 collatRat = shortPos.div(lendPos).mul(100); 
+        uint256 collatRat = shortPos.div(lendPos).mul(decimalAdj); 
         
         if (collatRat > collatUpper) {
-            uint256 adjAmount = (shortPos.sub(lendPos.mul(collatTarget).div(100))).div(100+collatTarget).mul(100);
+            uint256 adjAmount = (shortPos.sub(lendPos.mul(collatTarget).div(decimalAdj))).mul(decimalAdj).div(decimalAdj.add(collatTarget));
             /// remove some LP use 50% of withdrawn LP to repay debt and half to add to collateral 
             _withdrawLpRebalanceCollateral(adjAmount.mul(2));
             
         }
         
         if (collatRat < collatLower) {
-            uint256 adjAmount = (lendPos.mul(collatTarget).div(100).sub(shortPos)).div(100+collatTarget).mul(100);
+            uint256 adjAmount = ((lendPos.mul(collatTarget).div(decimalAdj)).sub(shortPos)).mul(decimalAdj).div(decimalAdj.add(collatTarget));
             uint256 borrowAmt = _borrowBaseEq(adjAmount);
             _redeemBase(adjAmount);
             _addToLP(borrowAmt);
@@ -244,7 +269,7 @@ contract rvUSDC is ERC20, ERC20Detailed, ReentrancyGuard, Ownable, vault {
       if (calcDebtRatio() < debtLower){
             /// amount of short token in LP is greater than amount borrowed -> 
             /// action = borrow more short token swap half for base token and add to LP + farm
-            uint256 borrowAmtBase = lpPos - shortPos.mul(2);
+            uint256 borrowAmtBase = lpPos.sub(shortPos.mul(2));
             uint256 borrowAmt = _borrowBaseEq(borrowAmtBase);
             _swapShortBase(borrowAmt.div(2));
             _addToLP(borrowAmt.div(2));
@@ -256,7 +281,7 @@ contract rvUSDC is ERC20, ERC20Detailed, ReentrancyGuard, Ownable, vault {
       if (calcDebtRatio() > debtUpper){
             /// amount of short token in LP is less than amount borrowed -> 
             /// action = remove some LP -> repay debt + add base token to collateral 
-            uint256 baseValueAdj = shortPos.mul(2) - lpPos;
+            uint256 baseValueAdj = (shortPos.mul(2)).sub(lpPos);
             _withdrawLpRebalance(baseValueAdj);
     
       }
@@ -272,17 +297,17 @@ contract rvUSDC is ERC20, ERC20Detailed, ReentrancyGuard, Ownable, vault {
         FARM(farm).deposit(pid, 0);
         uint256 shortPos = balanceDebt();
         
-        if (calcDebtRatio() < 100){
+        if (calcDebtRatio() < decimalAdj){
             /// more 
             uint256 lendAdd = _sellHarvestBase();
-            uint256 fee = lendAdd.mul(harvestFee).div(100);
+            uint256 fee = lendAdd.mul(harvestFee).div(decimalAdj);
             base.safeTransfer(strategist, fee);
 
             //_lendBase(lendAdd.sub(fee)); 
             
         } else {
             _sellHarvestShort(); 
-            uint256 fee = shortToken.balanceOf(address(this)).mul(harvestFee).div(100);
+            uint256 fee = shortToken.balanceOf(address(this)).mul(harvestFee).div(decimalAdj);
             shortToken.safeTransfer(strategist, fee);
             _repayDebt();
         }
