@@ -311,7 +311,7 @@ contract vault is ERC20, ERC20Detailed {
         uint256 shortLP = _getShortInLp();
         uint256 baseLP = getBaseInLp();
         uint256 _amountBase = _amountShort.mul(baseLP).div(shortLP);
-        _addToLpFull(_amountShort, _amountBase, _amountShort, _amountBase.mul(99).div(100));
+        _addToLpFull(_amountShort, _amountBase, _amountShort, _amountBase.mul(slippageAdj).div(decimalAdj));
         
     }
     
@@ -333,8 +333,8 @@ contract vault is ERC20, ERC20Detailed {
         uint256 baseLP = getBaseInLp();
         uint256 lpIssued = lp.totalSupply();
 
-        uint256 amountAMin = _amount.mul(shortLP).div(lpIssued).mul(99).div(decimalAdj);
-        uint256 amountBMin = _amount.mul(baseLP).div(lpIssued).mul(99).div(decimalAdj);
+        uint256 amountAMin = _amount.mul(shortLP).div(lpIssued).mul(slippageAdj).div(decimalAdj);
+        uint256 amountBMin = _amount.mul(baseLP).div(lpIssued).mul(slippageAdj).div(decimalAdj);
         
         
         
@@ -364,7 +364,7 @@ contract vault is ERC20, ERC20Detailed {
         uint256 baseLP_B = getBaseInLp();
         
         uint256 amountOutMinamountOutShort = harvestBalance.mul(shortLP_A).div(harvestLP_A);
-        uint256 amountOutMin = amountOutMinamountOutShort.mul(baseLP_B).div(shortLP_B).mul(99).div(100);
+        uint256 amountOutMin = amountOutMinamountOutShort.mul(baseLP_B).div(shortLP_B).mul(slippageAdj).div(decimalAdj);
         EXCHANGE(routerAddress).swapExactTokensForTokens(harvestBalance, amountOutMin, pathBase, address(this), block.timestamp + 120);
         return (amountOutMin);
     }
