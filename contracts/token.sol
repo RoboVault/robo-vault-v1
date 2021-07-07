@@ -241,7 +241,7 @@ contract rvUSDC is ERC20, ERC20Detailed, ReentrancyGuard, Ownable, vault {
         uint256 lpBal = balanceLp(); 
         
         /// ratio of amount borrowed to collateral 
-        uint256 collatRat = shortPos.div(lendPos).mul(decimalAdj); 
+        uint256 collatRat = calcCollateral();
         uint256 lendAdj = lendPos.mul(collatTarget).div(decimalAdj);
 
 
