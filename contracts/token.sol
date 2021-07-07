@@ -241,23 +241,20 @@ contract rvUSDC is ERC20, ERC20Detailed, ReentrancyGuard, Ownable, vault {
         uint256 lpBal = balanceLp(); 
         
         /// ratio of amount borrowed to collateral 
-        uint256 collatRat = calcCollateral();
-        uint256 lendAdj = lendPos.mul(collatTarget).div(decimalAdj);
-
-
+        uint256 collatRat = calcCollateral(); 
         
         if (collatRat > collatUpper) {
-            uint256 adjReduceCollateral = shortPos.sub(lendAdj).mul(decimalAdj).div(decimalAdj.add(collatTarget));
+            uint256 adjAmount = (shortPos.sub(lendPos.mul(collatTarget).div(decimalAdj))).mul(decimalAdj).div(decimalAdj.add(collatTarget));
             /// remove some LP use 50% of withdrawn LP to repay debt and half to add to collateral 
-            _withdrawLpRebalanceCollateral(adjReduceCollateral);
+            _withdrawLpRebalanceCollateral(adjAmount.mul(2));
             
         }
         
         if (collatRat < collatLower) {
-            uint256 adjIncreaseCollateral = lendAdj.sub(shortPos).mul(decimalAdj).div(decimalAdj.add(collatTarget));
+            uint256 adjAmount = ((lendPos.mul(collatTarget).div(decimalAdj)).sub(shortPos)).mul(decimalAdj).div(decimalAdj.add(collatTarget));
             uint256 borrowAmt = _borrowBaseEq(adjAmount);
-            _redeemBase(adjIncreaseCollateral);
-            _addToLP(adjIncreaseCollateral);
+            _redeemBase(adjAmount);
+            _addToLP(borrowAmt);
             _depoistLp();
         }
 
