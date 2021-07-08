@@ -16,8 +16,6 @@ contract rvUSDC is ERC20, ERC20Detailed, ReentrancyGuard, Ownable, vault {
     
     uint256 public pool;
     
-
-    
     uint256 lendAllocation = 700000;
     uint256 borrowAllocation = 300000; 
     
@@ -29,7 +27,7 @@ contract rvUSDC is ERC20, ERC20Detailed, ReentrancyGuard, Ownable, vault {
     uint256 collatTarget = 420000;
     uint256 collatLower = 350000;  
     uint256 debtUpper = 1030000;
-    uint256 debtLower = 970000; 
+    uint256 debtLower = 970000;
     uint256 harvestFee = 50000;
     uint256 withdrawalFee = 5000; /// only applies when funds are removed from strat & not reserves
 
@@ -76,8 +74,6 @@ contract rvUSDC is ERC20, ERC20Detailed, ReentrancyGuard, Ownable, vault {
         shortToken.safeApprove(routerAddress, 0);
         harvestToken.safeApprove(routerAddress, 0);
         lp.safeApprove(routerAddress, 0);
-
-        
     }
     
     /// update strategist -> this is the address that receives fees + can complete rebalancing and update strategy thresholds
@@ -158,19 +154,17 @@ contract rvUSDC is ERC20, ERC20Detailed, ReentrancyGuard, Ownable, vault {
     function deposit(uint256 _amount) external nonReentrant
     {
       require(_amount > 0, "deposit must be greater than 0");
-      pool = calcPoolValueInToken();
+      uint256 pool = calcPoolValueInToken();
     
       base.transferFrom(msg.sender, address(this), _amount);
     
       // Calculate pool shares
       uint256 shares = 0;
-      if (pool == 0) {
+      if (totalSupply() == 0) {
         shares = _amount;
-        pool = _amount;
       } else {
         shares = (_amount.mul(totalSupply())).div(pool);
       }
-      pool = calcPoolValueInToken();
       _mint(msg.sender, shares);
     }
     
@@ -310,7 +304,7 @@ contract rvUSDC is ERC20, ERC20Detailed, ReentrancyGuard, Ownable, vault {
     }
     
     /// called by keeper to harvest rewards and either repay debt or add to reserves 
-    function harvest_strat() external {
+    function harvestStrat() external {
         
         /// harvest from farm & based on amt borrowed vs LP value either -> repay some debt or add to collateral
         _onlyKeepers();
