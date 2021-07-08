@@ -23,7 +23,8 @@ contract rvUSDC is ERC20, ERC20Detailed, ReentrancyGuard, Ownable, vault {
     
     /// free cash held in base currency as % for speedy withdrawals 
     uint256 freeCashAllocation = 50000; 
-    /// upper, target and lower bounds for ratio of debt to collateral 
+    /// protocal limit & upper, target and lower thresholds for ratio of debt to collateral 
+    uint256 collatLimit = 750000;
     uint256 collatUpper = 500000; 
     uint256 collatTarget = 420000;
     uint256 collatLower = 350000;  
@@ -182,7 +183,7 @@ contract rvUSDC is ERC20, ERC20Detailed, ReentrancyGuard, Ownable, vault {
       require(_shares <= ibalance, "insufficient balance");
     
       // Could have over value from cTokens
-      pool = calcPoolValueInToken();
+      uint256 pool = calcPoolValueInToken();
       // Calc to redeem before updating balances
       uint256 r = (pool.mul(_shares)).div(totalSupply());
       _burn(msg.sender, _shares);
@@ -193,11 +194,10 @@ contract rvUSDC is ERC20, ERC20Detailed, ReentrancyGuard, Ownable, vault {
         /// take withdrawal fee for removing from strat 
         uint256 fee = _calcWithdrawalFee(r);
         r = r.sub(fee);
-        _withdrawSome(r.sub(b));
+        _withdrawSome(r);
       }
     
       IERC20(base).safeTransfer(msg.sender, r);
-      pool = calcPoolValueInToken();
     }
     
     function withdrawAll() public {
@@ -208,15 +208,17 @@ contract rvUSDC is ERC20, ERC20Detailed, ReentrancyGuard, Ownable, vault {
 
     /// function to remove funds from strategy when users withdraws funds in excess of reserves 
     function _withdrawSome(uint256 _amount) public {
-        require(_amount < calcPoolValueInToken());
-        uint256 amt_from_lp = _amount.mul(calcBorrowAllocation()).mul(2).div(decimalAdj); 
-        uint256 amt_from_lend = _amount.sub(amt_from_lp);
-        _liquidityCheck(amt_from_lend);
-        uint256 lpValue = balanceLp(); 
+        uint256 balTotal = calcPoolValueInToken();
+        uint256 balunPooled = balTotal.sub(base.balanceOf(address(this)));
+        uint256 amtFromStrat = _amount.sub(base.balanceOf(address(this)));
+        
+        
+        require(_amount <= calcPoolValueInToken());
+        uint256 stratPercent = amtFromStrat.mul(decimalAdj).div(balunPooled);
         uint256 lpPooled = countLpPooled();
         uint256 lpUnpooled =  lp.balanceOf(address(this)); 
         uint256 lpCount = lpUnpooled.add(lpPooled);
-        uint256 lpReq = amt_from_lp.mul(lpCount).div(balanceLp()); 
+        uint256 lpReq = lpCount.mul(stratPercent).div(decimalAdj); 
         uint256 lpWithdraw;
         if (lpReq - lpUnpooled < lpPooled){
             lpWithdraw = lpReq - lpUnpooled;
@@ -226,8 +228,26 @@ contract rvUSDC is ERC20, ERC20Detailed, ReentrancyGuard, Ownable, vault {
         _withdrawSomeLp(lpWithdraw);
         _removeAllLp(); 
         _repayDebt(); 
+
         uint256 redeemAmount = _amount - base.balanceOf(address(this)); 
-        _redeemBase(redeemAmount);
+        
+        /// need to add a check for collateral ratio after redeeming 
+        uint256 postRedeemCollateral = (balanceDebt()).mul(decimalAdj).div(balanceLend().sub(redeemAmount));
+        if (postRedeemCollateral < collatLimit){
+            _redeemBase(redeemAmount);
+        }
+        else {
+            uint256 subAmt = collatUpper.mul(balanceLend().sub(redeemAmount));
+            uint256 numerator = balanceDebt().mul(decimalAdj).sub(subAmt);
+            uint256 denominator = decimalAdj.sub(collatUpper); 
+            
+            _swapBaseShortExact(numerator.div(denominator)); 
+            _repayDebt();
+            redeemAmount = _amount - base.balanceOf(address(this));
+            _redeemBase(redeemAmount);
+        }
+        
+        
     }
 
     
