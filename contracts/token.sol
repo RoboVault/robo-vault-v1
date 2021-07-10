@@ -10,7 +10,6 @@ contract rvUSDC is ERC20, ERC20Detailed, ReentrancyGuard, Ownable, vault {
     
     address public strategist = 0xD074CDae76496d81Fab83023fee4d8631898bBAf;
     address public keeper = 0x7642604866B546b8ab759FceFb0C5c24b296B925;
-    uint256 public pool;
     /// default allocations, thresholds & fees
     uint256 public stratLendAllocation = 650000;
     uint256 public stratDebtAllocation = 350000; 
@@ -34,11 +33,11 @@ contract rvUSDC is ERC20, ERC20Detailed, ReentrancyGuard, Ownable, vault {
     event UpdatedKeeper(address newKeeper);
 
     // modifiers 
-    function _onlyAuthorized() internal {
+    function _onlyAuthorized() internal view {
         require(msg.sender == strategist || msg.sender == owner());
     }
 
-    function _onlyKeepers() internal {
+    function _onlyKeepers() internal view {
         require(
             msg.sender == keeper ||
                 msg.sender == strategist || 
@@ -47,7 +46,7 @@ contract rvUSDC is ERC20, ERC20Detailed, ReentrancyGuard, Ownable, vault {
     }
     
     /// before withdrawing from strat check there is enough liquidity in lending protocal 
-    function _liquidityCheck(uint256 _amount) internal {
+    function _liquidityCheck(uint256 _amount) internal view {
         uint256 lendBal = getBaseInLending();
         require(lendBal > _amount, "CREAM Currently has insufficent liquidity of base token to complete withdrawal.");
         
@@ -138,7 +137,7 @@ contract rvUSDC is ERC20, ERC20Detailed, ReentrancyGuard, Ownable, vault {
         
     }
     /// this is the withdrawl fee when user withdrawal results in removal of funds from strategy (i.e. withdrawal in excess of reserves)
-    function _calcWithdrawalFee(uint256 _r) internal returns(uint256) {
+    function _calcWithdrawalFee(uint256 _r) internal view returns(uint256) {
         uint256 _fee = _r.mul(withdrawalFee).div(decimalAdj);
         return(_fee);
     }
@@ -195,8 +194,6 @@ contract rvUSDC is ERC20, ERC20Detailed, ReentrancyGuard, Ownable, vault {
       
       uint256 ibalance = balanceOf(msg.sender);
       require(_shares <= ibalance, "insufficient balance");
-    
-      // Could have over value from cTokens
       uint256 pool = calcPoolValueInToken();
       // Calc to redeem before updating balances
       uint256 r = (pool.mul(_shares)).div(totalSupply());
@@ -268,11 +265,9 @@ contract rvUSDC is ERC20, ERC20Detailed, ReentrancyGuard, Ownable, vault {
 
     /// below function will rebalance collateral to within target range
     function rebalanceCollateral() external {
-        _onlyKeepers();      
-        uint256 shortPos = balanceDebt(); 
-        uint256 lendPos = balanceLend(); 
-        uint256 totalBal = calcPoolValueInToken(); 
-        uint256 lpBal = balanceLp(); 
+        _onlyKeepers();
+        uint256 shortPos = balanceDebt();
+        uint256 lendPos = balanceLend();
         
         /// ratio of amount borrowed to collateral 
         uint256 collatRat = calcCollateral(); 
@@ -330,7 +325,6 @@ contract rvUSDC is ERC20, ERC20Detailed, ReentrancyGuard, Ownable, vault {
         _onlyKeepers();
         //FARM(farm).deposit(pid, 0); /// for spirit swap call deposit with amt = 0
         FARM(farm).withdraw(pid, 0); /// for spooky swap call withdraw with amt = 0
-        uint256 shortPos = balanceDebt();
         
         if (calcDebtRatio() < decimalAdj){
             /// more 
