@@ -1,47 +1,39 @@
-addresses 
 
 FTM ADDRESSES 
-SPIRT as farm + USDC as BASE
-    IERC20 base = IERC20(0x04068da6c83afcfa0e13ba15a6696662335d5b75);  
-    IERC20 short_token = IERC20(0x21be370d5312f44cb42ce377bc9b8a0cef1a4c83);  
-    IERC20 harvest_token = IERC20(0x5cc61a78f164885776aa610fb0fe1257df78e59b);   
-    LEND lend_platform = IERC20(0x328a7b4d538a2b3942653a9983fda3c12c571141); 
-    BORROW borrow_platform = IERC20(0xd528697008aC67A21818751A5e3c58C8daE54696);  
-    FARM farm = IERC20(0x9083EA3756BDE6Ee6f27a6e996806FBD37F6F093); 
-    WRAPPER wrapper = IERC20(0x21be370d5312f44cb42ce377bc9b8a0cef1a4c83); 
-    EXCHANGE exchange = IERC20(0x16327E3FbDaCA3bcF7E38F5Af2599D2DDc33aE52); 
-    POOL pool = IERC20(0x16327E3FbDaCA3bcF7E38F5Af2599D2DDc33aE52);  
-    IERC20 lp = IERC20(0xe7e90f5a767406eff87fdad7eb07ef407922ec1d);  
-    IERC20 lp_harvest_token = IERC20(0x30748322B6E34545DBe0788C421886AEB5297789);  
-    address[] pathBase = [0x5cc61a78f164885776aa610fb0fe1257df78e59b,0x21be370d5312f44cb42ce377bc9b8a0cef1a4c83,0x04068da6c83afcfa0e13ba15a6696662335d5b75];
-    address[] pathShort = [0x5cc61a78f164885776aa610fb0fe1257df78e59b,0x21be370d5312f44cb42ce377bc9b8a0cef1a4c83];
 
+Spirit 
+USDC / CREAM 
+    /// base token specific info
+    address  USDC = 0x04068DA6C83AFCFA0e13ba15A6696662335D5B75;
+    address  lendPlatform = 0x328A7b4d538A2b3942653a9983fdA3C12c571141; // platform for addding base token as collateral
+    address  LP = 0xe7E90f5a767406efF87Fdad7EB07ef407922EC1D; /// LP contract for base & short token
+    uint256  pid  =  4; 
+    IERC20 base = IERC20(USDC);
+    
+    address  WFTM = 0x21be370D5312f44cB42ce377BC9b8a0cEF1A4C83;
+    address  borrow_platform = 0xd528697008aC67A21818751A5e3c58C8daE54696;
+    address  comptrollerAddress = 0x4250A6D3BD57455d7C6821eECb6206F507576cD2; /// Cream Comptroller 
+    address  SpiritRouter = 0x16327E3FbDaCA3bcF7E38F5Af2599D2DDc33aE52;
+    address  SpiritMaster = 0x9083EA3756BDE6Ee6f27a6e996806FBD37F6F093;
+    address  routerAddress = SpiritRouter; 
+    address  farm = SpiritMaster; /// spirit masterchef 
+    address  Spirit = 0x5Cc61A78F164885776AA610fb0FE1257df78E59B; 
+    address  SpiritLP = 0x30748322B6E34545DBe0788C421886AEB5297789;
 
-ETH + SUSHI 
-
-    address USDC = 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48;
-    address USDT = 0xdAC17F958D2ee523a2206206994597C13D831ec7;
-    address WETH = 0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2;
-    address SUSHI = 0x6B3595068778DD592e39A122f4f5a5cF09C90fE2;
-    address crUSDC = 0x44fbeBd2F576670a6C33f6Fc0B00aA8c5753b322;
-    address crETH = 0xD06527D5e56A3495252A528C4987003b712860eE;
-    address SUSHIFARM = 0xc2EdaD668740f1aA35E4D8f227fB8E17dcA888Cd; 
-    address USDCWETHLP = 0x397FF1542f962076d0BFE58eA045FfA2d347ACa0; /// SUSHI USDC & WETH LP Pool
-
-
-    IERC20 base = IERC20(USDC);  
-    IERC20 short_token = IERC20(WETH);  
-    IERC20 harvest_token = IERC20(SUSHI);   
-    LEND lend_platform = IERC20(crUSDC); 
-    BORROW borrow_platform = IERC20(crETH);  
-    FARM farm = IERC20(SUSHIFARM); 
-    WRAPPER wrapper = IERC20(WETH); 
-    EXCHANGE exchange = IERC20(0x16327E3FbDaCA3bcF7E38F5Af2599D2DDc33aE52); 
-    POOL pool = IERC20(0x16327E3FbDaCA3bcF7E38F5Af2599D2DDc33aE52);  
-    IERC20 lp = IERC20(0xe7e90f5a767406eff87fdad7eb07ef407922ec1d);  
-    IERC20 lp_harvest_token = IERC20(0x30748322B6E34545DBe0788C421886AEB5297789);  
-    address[] pathBase = [0x5cc61a78f164885776aa610fb0fe1257df78e59b,0x21be370d5312f44cb42ce377bc9b8a0cef1a4c83,0x04068da6c83afcfa0e13ba15a6696662335d5b75];
-    address[] pathShort = [0x5cc61a78f164885776aa610fb0fe1257df78e59b,0x21be370d5312f44cb42ce377bc9b8a0cef1a4c83];
-
-
-USDCWHALE = 0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48
+WBTC / CREAM 
+    /// base token specific info
+    address  WBTC = 0x321162Cd933E2Be498Cd2267a90534A804051b11;
+    address  lendPlatform = 0x20CA53E2395FA571798623F1cFBD11Fe2C114c24; // platform for addding base token as collateral
+    address  LP = 0x279b2c897737a50405ED2091694F225D83F2D3bA; /// LP contract for wbtc & wftm 
+    uint256  pid  =  2; 
+    IERC20 base = IERC20(WBTC);
+    
+    address  WFTM = 0x21be370D5312f44cB42ce377BC9b8a0cEF1A4C83;
+    address  borrow_platform = 0xd528697008aC67A21818751A5e3c58C8daE54696;
+    address  comptrollerAddress = 0x4250A6D3BD57455d7C6821eECb6206F507576cD2; /// Cream Comptroller 
+    address  SpiritRouter = 0x16327E3FbDaCA3bcF7E38F5Af2599D2DDc33aE52;
+    address  SpiritMaster = 0x9083EA3756BDE6Ee6f27a6e996806FBD37F6F093;
+    address  routerAddress = SpiritRouter; 
+    address  farm = SpiritMaster; /// spirit masterchef 
+    address  Spirit = 0x5Cc61A78F164885776AA610fb0FE1257df78E59B; 
+    address  SpiritLP = 0x30748322B6E34545DBe0788C421886AEB5297789;

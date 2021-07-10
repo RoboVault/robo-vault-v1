@@ -11,7 +11,6 @@ interface LEND {
     function exchangeRateCurrent() external view returns (uint256);
     function exchangeRateStored() external view returns (uint);
     function getCash() external view returns (uint);
-    
     function balanceOfUnderlying(address) external view returns (uint256);
 }
 
@@ -38,52 +37,47 @@ interface FARM {
     function deposit(uint256 _pid, uint256 _amount) external; /// deposit LP into farm -> call deposit with _amount = 0 to harvest LP 
     function withdraw(uint256 _pid, uint256 _amount) external; /// withdraw LP from farm
     function userInfo(uint256 _pid, address user) external view returns (uint); 
+    function pendingSpirit(uint256 _pid, address _user) external view returns (uint256);
 }
 
 interface EXCHANGE {
     /// placeholder -> where to exchange tokens 
     function swapExactTokensForTokens(uint256 amountIn, uint256 amountOutMin, address[] calldata path, address to, uint256 deadline) external; 
+    function swapTokensForExactTokens(uint amountOut, uint amountInMax, address[] calldata path, address to, uint deadline) external;
 }
 
-contract vault {
+contract vault is ERC20, ERC20Detailed {
 
+    using SafeERC20 for IERC20;
     using SafeMath for uint256;
+
+    uint256 decimalAdj = 1000000; /// variable used when calculating (equivant to 1 / 100% for float like operations )
+    uint256 slippageAdj = 990000;
+    uint256 slippageAdjHigh = 1010000;
+    
+    
+    /// base token specific info
     address  USDC = 0x04068DA6C83AFCFA0e13ba15A6696662335D5B75;
-    /*
-    address  WBTC = 0x321162Cd933E2Be498Cd2267a90534A804051b11;
-    address  WETH = 0x74b23882a30290451A17c44f4F05243b6b58C76d;
-    address  USDT = 0x049d68029688eAbF473097a2fC38ef61633A3C7A;
-    */
+    address  lendPlatform = 0x328A7b4d538A2b3942653a9983fdA3C12c571141; // platform for addding base token as collateral
+    address  LP = 0xe7E90f5a767406efF87Fdad7EB07ef407922EC1D; /// LP contract for base & short token
+    uint256  pid  =  4; 
+    IERC20 base = IERC20(USDC);
+    
     address  WFTM = 0x21be370D5312f44cB42ce377BC9b8a0cEF1A4C83;
-    address  lend_platform = 0x328A7b4d538A2b3942653a9983fdA3C12c571141; // platform for addding base token as collateral
-    address  LP_spirit = 0xe7E90f5a767406efF87Fdad7EB07ef407922EC1D; /// LP contract for base & short token
-    address  LP_spooky = 0x2b4C76d0dc16BE1C31D4C1DC53bF9B45987Fc75c; /// LP contract for base & short token (on spooky)
     address  borrow_platform = 0xd528697008aC67A21818751A5e3c58C8daE54696;
     address  comptrollerAddress = 0x4250A6D3BD57455d7C6821eECb6206F507576cD2; /// Cream Comptroller 
     address  SpiritRouter = 0x16327E3FbDaCA3bcF7E38F5Af2599D2DDc33aE52;
-    address  SpookyRouter = 0xF491e7B69E4244ad4002BC14e878a34207E38c29;
     address  SpiritMaster = 0x9083EA3756BDE6Ee6f27a6e996806FBD37F6F093;
-    address  SpookyMaster =  0x2b2929E785374c651a81A63878Ab22742656DcDd;
     address  routerAddress = SpiritRouter; 
     address  farm = SpiritMaster; /// spirit masterchef 
     address  Spirit = 0x5Cc61A78F164885776AA610fb0FE1257df78E59B; 
-    address  Spooky = 0x841FAD6EAe12c286d1Fd18d1d525DFfA75C7EFFE;
     address  SpiritLP = 0x30748322B6E34545DBe0788C421886AEB5297789;
-    address  SpookyLP = 0xEc7178F4C41f346b2721907F5cF7628E388A7a58;
     
-    
-    uint256  pid  =  4; /// spirit = 4 / spooky = 2 ; 
-    uint256  tokensBorrowed = 0;
-
-    IERC20 base = IERC20(USDC);
-    IERC20 short_token = IERC20(WFTM);
-    IERC20 lp = IERC20(LP_spirit);
-    IERC20 lp_harvest_token = IERC20(SpiritLP); 
-    IERC20 harvest_token = IERC20(Spirit);
-    IERC20 lend_tokens = IERC20(lend_platform);
-    ///IERC20 router = IERC20(routerAddress);
-    
-
+    IERC20 shortToken = IERC20(WFTM);
+    IERC20 lp = IERC20(LP);
+    IERC20 lp_harvestToken = IERC20(SpiritLP); 
+    IERC20 harvestToken = IERC20(Spirit);
+    IERC20 lend_tokens = IERC20(lendPlatform);
 
     
     constructor() public  {
@@ -95,7 +89,7 @@ contract vault {
     }
     
 
-    
+    /// calculate total value of vault assets 
     function calcPoolValueInToken() public view returns(uint256){
 
         uint256 lpvalue = balanceLp();
@@ -103,91 +97,97 @@ contract vault {
         uint256 baseInWallet = balanceBase();
         uint256 debtShort = balanceDebt();
         uint256 shortInWallet = balanceShortBaseEq(); 
+        uint256 pendingRewards = balancePendingHarvest();
 
-        return (baseInWallet + collateral +  lpvalue - debtShort + shortInWallet) ; 
+        return (baseInWallet + collateral +  lpvalue - debtShort + shortInWallet + pendingRewards) ; 
 
     }
-
+    // debt ratio - used to trigger rebalancing of debt 
     function calcDebtRatio() public view returns(uint256){
         uint256 debtShort = balanceDebt();
         uint256 lpvalue = balanceLp();
-        uint256 debtRatio = debtShort.div(lpvalue.div(2)).mul(100); 
+        uint256 debtRatio = debtShort.mul(decimalAdj).mul(2).div(lpvalue); 
         return (debtRatio);
     }
-
+    // calculate debt / collateral - used to trigger rebalancing of debt & collateral 
     function calcCollateral() public view returns(uint256){
         uint256 debtShort = balanceDebt();
         uint256 collateral = balanceLend();
-        uint256 collatRatio = debtShort.mul(100).div(collateral); 
+        uint256 collatRatio = debtShort.mul(decimalAdj).div(collateral); 
         return (collatRatio);
     }
 
+    // current % of vault assets held in reserve - used to trigger deployment of assets into strategy
     function calcFreeCash() public view returns(uint256){
         uint256 bal = base.balanceOf(address(this)); 
         uint256 totalBal = calcPoolValueInToken();
-        uint256 freeCashRatio = bal.mul(100).div(totalBal);
+        uint256 freeCashRatio = bal.mul(decimalAdj).div(totalBal);
         return (freeCashRatio); 
     }
 
     /// get value of all LP in base currency
     function balanceLp() public view returns(uint256) {
-        uint256 baseLP = _get_base_in_lp();
+        uint256 baseLP = getBaseInLp();
         uint256 lpIssued = lp.totalSupply();
         uint256 lpPooled = countLpPooled();
         uint256 totalLP = lpPooled + lp.balanceOf(address(this));
         uint256 lpvalue = totalLP.mul(baseLP).div(lpIssued).mul(2);
         return(lpvalue);
     }
-    
+    // value of borrowed tokens in value of base tokens
     function balanceDebt() public view returns(uint256) {
-        uint256 shortLP = _get_short_in_lp();
-        uint256 baseLP = _get_base_in_lp();
+        uint256 shortLP = _getShortInLp();
+        uint256 baseLP = getBaseInLp();
         uint256 debtShort = BORROW(borrow_platform).borrowBalanceStored(address(this));
         return (debtShort.mul(baseLP).div(shortLP));
         
     }
     
+    function balancePendingHarvest() public view returns(uint256){
+        uint256 rewardsPending = FARM(farm).pendingSpirit(pid, address(this));
+        uint256 harvestLP_A = _getHarvestInHarvestLp();
+        uint256 shortLP_A = _getShortInHarvestLp();
+        uint256 shortLP_B = _getShortInLp();
+        uint256 baseLP_B = getBaseInLp();
+        uint256 balShort = rewardsPending.mul(shortLP_A).div(harvestLP_A);
+        uint256 balRewards = balShort.mul(baseLP_B).div(shortLP_B);
+        return (balRewards);
+        
+    }
+    
+    // reserves 
     function balanceBase() public view returns(uint256){
         return (base.balanceOf(address(this)));
     }
     
     function balanceShort() public view returns(uint256){
-        return (short_token.balanceOf(address(this)));
+        return (shortToken.balanceOf(address(this)));
     }
     
     function balanceShortBaseEq() public view returns(uint256){
-        uint256 shortLP = _get_short_in_lp();
-        uint256 baseLP = _get_base_in_lp();
-        return (short_token.balanceOf(address(this)).mul(baseLP).div(shortLP));
+        uint256 shortLP = _getShortInLp();
+        uint256 baseLP = getBaseInLp();
+        return (shortToken.balanceOf(address(this)).mul(baseLP).div(shortLP));
     }
     
     function balanceLend() public view returns(uint256){
         uint256 b = lend_tokens.balanceOf(address(this));
-        return (b.mul(LEND(lend_platform).exchangeRateStored()).div(1e18));
+        return (b.mul(LEND(lendPlatform).exchangeRateStored()).div(1e18));
     }
-    
-    function _lendBase(uint256 amount) internal {
-        base.approve(address(lend_platform), amount);
-        LEND(lend_platform).mint(amount);
+    // lend base tokens to lending platform 
+    function _lendBase(uint256 amount) public {
+        LEND(lendPlatform).mint(amount);
         /// baselent += amount;
     }
     
     
 
     
-    function _add_to_LP(uint256 _amount_short) internal {
-        uint256 shortLP = _get_short_in_lp();
-        uint256 baseLP = _get_base_in_lp();
-        uint256 _amount_base = _amount_short.mul(baseLP).div(shortLP);
-        _add_to_LP(_amount_short, _amount_base, _amount_short, _amount_base.mul(99).div(100));
-        
-    }
-    
-
-    function _borrow_base_eq(uint256 _amount) internal returns(uint256) {
+    // borrow tokens woth _amount of base tokens 
+    function _borrowBaseEq(uint256 _amount) public returns(uint256) {
         ///uint256 bal = base.balanceOf(address(this));
-        uint256 shortLP = _get_short_in_lp();
-        uint256 baseLP = _get_base_in_lp();
+        uint256 shortLP = _getShortInLp();
+        uint256 baseLP = getBaseInLp();
         uint256 borrowamount = _amount.mul(shortLP).div(baseLP);
         _borrow(borrowamount);
         return (borrowamount);
@@ -195,49 +195,58 @@ contract vault {
     }
 
 
-    function _borrow(uint256 borrowAmount) internal {
+    function _borrow(uint256 borrowAmount) public {
         BORROW(borrow_platform).borrow(borrowAmount);
-        tokensBorrowed += borrowAmount;
-        
+
     }
     
-    function _repay_debt() public {
-        uint256 _bal = short_token.balanceOf(address(this)); 
-        short_token.approve(address(borrow_platform), _bal);
+    // automatically repays debt using any short tokens held in wallet up to total debt value
+    function _repayDebt() public {
+        uint256 _bal = shortToken.balanceOf(address(this)); 
         uint256 _debt =  BORROW(borrow_platform).borrowBalanceStored(address(this)); 
         if (_bal < _debt){
             BORROW(borrow_platform).repayBorrow(_bal);
-            tokensBorrowed -= _bal;
-            
         }
         else {
             BORROW(borrow_platform).repayBorrow(_debt);
-            tokensBorrowed -= _debt;
         }
     }
     
-    function _get_short_in_lp() public view returns (uint256) {
-        uint256 short_lp = short_token.balanceOf(address(lp)) ; 
+    function calcBorrowAllocation() public view returns (uint256){
+        uint256 balLend = balanceLend();
+        uint256 balLp = balanceLp(); 
+        uint256 borrowAllocation = balLp.mul(decimalAdj).div(balLend.add(balLp.div(2))).div(2);
+        return (borrowAllocation);
+        
+    }
+    
+    function _getShortInLp() public view returns (uint256) {
+        uint256 short_lp = shortToken.balanceOf(address(lp)) ; 
         return (short_lp);          
     }
     
-    function _get_base_in_lp() public view returns (uint256) {
+    function getBaseInLending() public view returns (uint256) {
+        uint256 bal = base.balanceOf(address(lendPlatform));
+        return(bal);
+    }
+    
+    function getBaseInLp() public view returns (uint256) {
         uint256 base_lp = base.balanceOf(address(lp)) ;
         return (base_lp);
     }
     
-    function _get_harvest_in_harvest_lp() public view returns(uint256) {
-        uint256 harvest_lp = harvest_token.balanceOf(address(lp_harvest_token)); 
+    function _getHarvestInHarvestLp() public view returns(uint256) {
+        uint256 harvest_lp = harvestToken.balanceOf(address(lp_harvestToken)); 
         return harvest_lp;          
     }
     
-    function _get_short_in_harvest_lp() public view returns(uint256) {
-        uint256 short_token_lp = short_token.balanceOf(address(lp_harvest_token)); 
-        return short_token_lp;          
+    function _getShortInHarvestLp() public view returns(uint256) {
+        uint256 shortToken_lp = shortToken.balanceOf(address(lp_harvestToken)); 
+        return shortToken_lp;          
     }
     
-    function _redeem_base(uint256 _redeem_amount) public {
-        LEND(lend_platform).redeemUnderlying(_redeem_amount); 
+    function _redeemBase(uint256 _redeem_amount) public {
+        LEND(lendPlatform).redeemUnderlying(_redeem_amount); 
     }
 
     function countLpPooled() public view returns(uint256){
@@ -245,7 +254,7 @@ contract vault {
         return lpPooled;
     }
     
-    
+    // withdraws some LP worth _amount, converts all withdrawn LP to short token to repay debt 
     function _withdrawLpRebalance(uint256 _amount) public {
         uint256 lpValue = balanceLp(); 
         uint256 lpUnpooled =  lp.balanceOf(address(this)); 
@@ -260,10 +269,16 @@ contract vault {
         }
         _withdrawSomeLp(lpWithdraw);
         _removeAllLp(); 
-         _swap_base_for_short(_amount.div(2));
-        _repay_debt(); 
+        if (_amount.div(2) <= base.balanceOf(address(this))){
+            _swapBaseShort(_amount.div(2));
+        } else {
+            _swapBaseShort(base.balanceOf(address(this)));
+        }
+         
+        _repayDebt(); 
     }
     
+    //  withdraws some LP worth _amount, uses withdrawn LP to add to collateral & repay debt 
     function _withdrawLpRebalanceCollateral(uint256 _amount) public {
         uint256 lpValue = balanceLp(); 
         uint256 lpUnpooled =  lp.balanceOf(address(this)); 
@@ -279,51 +294,51 @@ contract vault {
         _withdrawSomeLp(lpWithdraw);
         _removeAllLp(); 
         
-        if (_amount.div(2) > base.balanceOf(address(this))){
+        if (_amount.div(2) <= base.balanceOf(address(this))){
             _lendBase(_amount.div(2));
         } else {
             _lendBase(base.balanceOf(address(this)));
         }
-        _repay_debt(); 
+        _repayDebt(); 
     }
     
     
-    function _add_to_LP(uint256 amountADesired, uint256 amountBDesired, uint256 amountAMin, uint256 amountBMin) internal {
-        base.approve(routerAddress, amountBDesired);
-        short_token.approve(routerAddress, amountADesired);
-        ROUTER(routerAddress).addLiquidity(address(short_token), address(base), amountADesired, amountBDesired, amountAMin, amountBMin, address(this), block.timestamp + 15); /// add liquidity 
+    function _addToLpFull(uint256 amountADesired, uint256 amountBDesired, uint256 amountAMin, uint256 amountBMin) internal {
+        ROUTER(routerAddress).addLiquidity(address(shortToken), address(base), amountADesired, amountBDesired, amountAMin, amountBMin, address(this), block.timestamp + 15); /// add liquidity 
     }
     
-    function _depoistLp() internal {
-        uint256 lp_balance = lp.balanceOf(address(this)); /// get number of LP tokens
-        lp.approve(address(farm), lp_balance);
-        FARM(farm).deposit(pid, lp_balance); /// deposit LP tokens to farm
-        ///lpPooled += lp_balance; /// update balance for number of LP tokens in Farm 
+    function _addToLP(uint256 _amountShort) public {
+        uint256 shortLP = _getShortInLp();
+        uint256 baseLP = getBaseInLp();
+        uint256 _amountBase = _amountShort.mul(baseLP).div(shortLP);
+        _addToLpFull(_amountShort, _amountBase, _amountShort, _amountBase.mul(slippageAdj).div(decimalAdj));
+        
+    }
+    
+    function _depoistLp() public {
+        uint256 lpBalance = lp.balanceOf(address(this)); /// get number of LP tokens
+        FARM(farm).deposit(pid, lpBalance); /// deposit LP tokens to farm
     }
 
     function _withdrawSomeLp(uint256 _amount) public {
         require(_amount <= countLpPooled());
         FARM(farm).withdraw(pid, _amount);
-        ///lpPooled -= _amount; 
     }
     
+    // all LP currently not in Farm is removed 
     function _removeAllLp() public {
         ///require(msg.sender == owner, 'only admin'); 
         uint256 _amount = lp.balanceOf(address(this));
-        uint256 shortLP = _get_short_in_lp();
-        uint256 baseLP = _get_base_in_lp();
+        uint256 shortLP = _getShortInLp();
+        uint256 baseLP = getBaseInLp();
         uint256 lpIssued = lp.totalSupply();
-        /*
-        uint256 amountAMin = _amount.mul(shortLP).mul(99).div(100).div(lpIssued);
-        uint256 amountBMin = _amount.mul(baseLP).mul(99).div(100).div(lpIssued);
-        */
+
+        uint256 amountAMin = _amount.mul(shortLP).div(lpIssued).mul(slippageAdj).div(decimalAdj);
+        uint256 amountBMin = _amount.mul(baseLP).div(lpIssued).mul(slippageAdj).div(decimalAdj);
         
-        uint256 amountAMin = 1;
-        uint256 amountBMin = 1;
         
-        lp.approve(routerAddress, _amount);
         
-        ROUTER(routerAddress).removeLiquidity(address(short_token), address(base), _amount, amountAMin, amountBMin,address(this), block.timestamp + 15);
+        ROUTER(routerAddress).removeLiquidity(address(shortToken), address(base), _amount, amountAMin, amountBMin,address(this), block.timestamp + 15);
     }
     
     
@@ -334,75 +349,83 @@ contract vault {
     }
     
       
+    // below functions interact with AMM converting Harvest Rewards & Swapping between base & short token as required for rebalancing 
     
-
-    
-    function _sell_harvest_base() public returns (uint256) {
+    function _sellHarvestBase() public returns (uint256) {
         address[] memory pathBase = new address[](3);
-        pathBase[0] = address(harvest_token);
-        pathBase[1] = address(short_token);
+        pathBase[0] = address(harvestToken);
+        pathBase[1] = address(shortToken);
         pathBase[2] = address(base);
         
-        uint256 harvestBalance = harvest_token.balanceOf(address(this)); 
-        harvest_token.approve(routerAddress, harvestBalance);
-        uint256 harvestLP_A = _get_harvest_in_harvest_lp();
-        uint256 shortLP_A = _get_short_in_harvest_lp();
-        uint256 shortLP_B = _get_short_in_lp();
-        uint256 baseLP_B = _get_base_in_lp();
+        uint256 harvestBalance = harvestToken.balanceOf(address(this)); 
+        uint256 harvestLP_A = _getHarvestInHarvestLp();
+        uint256 shortLP_A = _getShortInHarvestLp();
+        uint256 shortLP_B = _getShortInLp();
+        uint256 baseLP_B = getBaseInLp();
         
         uint256 amountOutMinamountOutShort = harvestBalance.mul(shortLP_A).div(harvestLP_A);
-        uint256 amountOutMin = amountOutMinamountOutShort.mul(baseLP_B).div(shortLP_B).mul(99).div(100);
+        uint256 amountOutMin = amountOutMinamountOutShort.mul(baseLP_B).div(shortLP_B).mul(slippageAdj).div(decimalAdj);
         EXCHANGE(routerAddress).swapExactTokensForTokens(harvestBalance, amountOutMin, pathBase, address(this), block.timestamp + 120);
         return (amountOutMin);
     }
 
-    function _sell_harvest_short() public {
+    function _sellHarvestShort() public {
         address[] memory pathShort = new address[](2);
-        pathShort[0] = address(harvest_token);
-        pathShort[1] = address(short_token);
+        pathShort[0] = address(harvestToken);
+        pathShort[1] = address(shortToken);
 
 
-        uint256 harvestBalance = harvest_token.balanceOf(address(this)); 
-        harvest_token.approve(routerAddress, harvestBalance);
-        uint256 harvestLP = _get_harvest_in_harvest_lp();
-        uint256 shortLP = _get_short_in_harvest_lp();
-        uint256 amountOutMin = harvestBalance.mul(shortLP).div(harvestLP).mul(99).div(100);
+        uint256 harvestBalance = harvestToken.balanceOf(address(this)); 
+        uint256 harvestLP = _getHarvestInHarvestLp();
+        uint256 shortLP = _getShortInHarvestLp();
+        uint256 amountOutMin = harvestBalance.mul(shortLP).mul(slippageAdj).div(harvestLP).div(decimalAdj);
         EXCHANGE(routerAddress).swapExactTokensForTokens(harvestBalance, amountOutMin, pathShort, address(this), block.timestamp + 120);
     }
 
-    function _swap_base_for_short(uint256 _amount) public {
+    function _swapBaseShort(uint256 _amount) public {
         
-        address[] memory pathSwap = new address[](3);
+        address[] memory pathSwap = new address[](2);
         pathSwap[0] = address(base);
         ///pathSwap[1] = 0xAd84341756Bf337f5a0164515b1f6F993D194E1f;
-        pathSwap[1] = address(short_token);
-        base.approve(routerAddress, _amount);
+        pathSwap[1] = address(shortToken);
+
         
-        
-        uint256 shortLP = _get_short_in_lp();
-        uint256 baseLP = _get_base_in_lp();
-        uint256 amountOutMin = _amount.mul(shortLP).div(baseLP).mul(99).div(100);
+        uint256 shortLP = _getShortInLp();
+        uint256 baseLP = getBaseInLp();
+        uint256 amountOutMin = _amount.mul(shortLP).mul(slippageAdj).div(baseLP).div(decimalAdj);
         EXCHANGE(routerAddress).swapExactTokensForTokens(_amount, amountOutMin, pathSwap, address(this), block.timestamp + 120);
         
     }
     
-    function _swap_short_for_base(uint256 _amount) public {
+    function _swapShortBase(uint256 _amount) public {
         
         address[] memory pathSwap = new address[](2);
         
-        pathSwap[0] = address(short_token);
+        pathSwap[0] = address(shortToken);
         pathSwap[1] = address(base);
         
-        short_token.approve(routerAddress, _amount);
 
-        uint256 shortLP = _get_short_in_lp();
-        uint256 baseLP = _get_base_in_lp();
-        uint256 amountOutMin = _amount.mul(baseLP).div(shortLP).mul(99).div(100);
+        uint256 shortLP = _getShortInLp();
+        uint256 baseLP = getBaseInLp();
+        uint256 amountOutMin = _amount.mul(baseLP).mul(slippageAdj).div(decimalAdj).div(shortLP);
         EXCHANGE(routerAddress).swapExactTokensForTokens(_amount, amountOutMin, pathSwap, address(this), block.timestamp + 120);
+        
+    }
+    
+    function _swapBaseShortExact(uint256 _amountOut) public {
+        
+        address[] memory pathSwap = new address[](2);
+        pathSwap[0] = address(base);
+        pathSwap[1] = address(shortToken);
+        
+        
+        uint256 shortLP = _getShortInLp();
+        uint256 baseLP = getBaseInLp();
+        uint256 amountInMax = _amountOut.mul(baseLP).mul(slippageAdjHigh).div(decimalAdj).div(shortLP);
+        EXCHANGE(routerAddress).swapExactTokensForTokens(_amountOut, amountInMax, pathSwap, address(this), block.timestamp + 120);
         
     }
     
     
 }
 
-        

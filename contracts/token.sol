@@ -1,9 +1,7 @@
 pragma solidity ^0.5.0;
 
-
-import "./vaultUSDC.sol";
+import "./vaultUSDCSpooky.sol";
 import "./vaultHelpers.sol";
-
 
 
 contract rvUSDC is ERC20, ERC20Detailed, ReentrancyGuard, Ownable, vault {
@@ -12,22 +10,18 @@ contract rvUSDC is ERC20, ERC20Detailed, ReentrancyGuard, Ownable, vault {
     
     address public strategist;
     address public keeper;
-    
-    
     uint256 public pool;
     
-
-    
-    uint256 lendAllocation = 700000;
-    uint256 borrowAllocation = 300000; 
+    uint256 lendAllocation = 600000;
+    uint256 borrowAllocation = 400000; 
     
     /// free cash held in base currency as % for speedy withdrawals 
     uint256 freeCashAllocation = 50000; 
     /// protocal limit & upper, target and lower thresholds for ratio of debt to collateral 
     uint256 collatLimit = 750000;
-    uint256 collatUpper = 500000; 
-    uint256 collatTarget = 420000;
-    uint256 collatLower = 350000;  
+    uint256 collatUpper = 720000; 
+    uint256 collatTarget = 660000;
+    uint256 collatLower = 600000;  
     uint256 debtUpper = 1030000;
     uint256 debtLower = 970000; 
     uint256 harvestFee = 50000;
@@ -310,11 +304,12 @@ contract rvUSDC is ERC20, ERC20Detailed, ReentrancyGuard, Ownable, vault {
     }
     
     /// called by keeper to harvest rewards and either repay debt or add to reserves 
-    function harvest_strat() external {
+    function harvestStrat() external {
         
         /// harvest from farm & based on amt borrowed vs LP value either -> repay some debt or add to collateral
         _onlyKeepers();
-        FARM(farm).deposit(pid, 0);
+        //FARM(farm).deposit(pid, 0); /// for spirit swap call deposit with amt = 0
+        FARM(farm).withdraw(pid, 0); /// for spooky swap call withdraw with amt = 0
         uint256 shortPos = balanceDebt();
         
         if (calcDebtRatio() < decimalAdj){
