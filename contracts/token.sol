@@ -140,8 +140,7 @@ contract rvUSDC is ERC20, ERC20Detailed, ReentrancyGuard, Ownable, vault {
     /// this is the withdrawl fee when user withdrawal results in removal of funds from strategy (i.e. withdrawal in excess of reserves)
     function _calcWithdrawalFee(uint256 _r) internal returns(uint256) {
         uint256 _fee = _r.mul(withdrawalFee).div(decimalAdj);
-        return(_fee)
-
+        return(_fee);
     }
     
 
