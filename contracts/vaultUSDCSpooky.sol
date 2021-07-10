@@ -201,6 +201,7 @@ contract vault is ERC20, ERC20Detailed {
 
     }
     
+    
     // automatically repays debt using any short tokens held in wallet up to total debt value
     function _repayDebt() public {
         uint256 _bal = shortToken.balanceOf(address(this)); 
@@ -221,6 +222,12 @@ contract vault is ERC20, ERC20Detailed {
         
     }
     
+    function getDebtShort() public returns(uint256) {
+        uint256 _debt =  BORROW(borrow_platform).borrowBalanceStored(address(this)); 
+        return(_debt);
+        
+    }
+    
     function _getShortInLp() public view returns (uint256) {
         uint256 short_lp = shortToken.balanceOf(address(lp)) ; 
         return (short_lp);          
@@ -230,6 +237,8 @@ contract vault is ERC20, ERC20Detailed {
         uint256 bal = base.balanceOf(address(lendPlatform));
         return(bal);
     }
+    
+
     
     function getBaseInLp() public view returns (uint256) {
         uint256 base_lp = base.balanceOf(address(lp)) ;

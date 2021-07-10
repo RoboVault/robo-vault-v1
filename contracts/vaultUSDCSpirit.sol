@@ -220,6 +220,12 @@ contract vault is ERC20, ERC20Detailed {
         
     }
     
+    function getDebtShort() public returns(uint256) {
+        uint256 _debt =  BORROW(borrow_platform).borrowBalanceStored(address(this)); 
+        return(_debt);
+        
+    }
+    
     function _getShortInLp() public view returns (uint256) {
         uint256 short_lp = shortToken.balanceOf(address(lp)) ; 
         return (short_lp);          

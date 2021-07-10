@@ -8,24 +8,27 @@ contract rvUSDC is ERC20, ERC20Detailed, ReentrancyGuard, Ownable, vault {
     using SafeERC20 for IERC20;
     using SafeMath for uint256;
     
-    address public strategist;
-    address public keeper;
+    address public strategist = 0xD074CDae76496d81Fab83023fee4d8631898bBAf;
+    address public keeper = 0x7642604866B546b8ab759FceFb0C5c24b296B925;
     uint256 public pool;
+    /// default allocations, thresholds & fees
+    uint256 public stratLendAllocation = 650000;
+    uint256 public stratDebtAllocation = 350000; 
+    uint256 public collatUpper = 600000; 
+    uint256 public collatTarget = 530000;
+    uint256 public collatLower = 450000;  
+    uint256 public debtUpper = 1030000;
+    uint256 public debtLower = 970000;
+    uint256 public harvestFee = 50000;
+    uint256 public withdrawalFee = 5000;
+    uint256 public reserveAllocation = 50000;
     
-    uint256 lendAllocation = 600000;
-    uint256 borrowAllocation = 400000; 
-    
-    /// reserves held in base currency as % for speedy withdrawals 
-    uint256 reservesAllocation = 50000; 
-    /// protocal limit & upper, target and lower thresholds for ratio of debt to collateral 
+    /// protocal limits & upper, target and lower thresholds for ratio of debt to collateral 
     uint256 collatLimit = 750000;
-    uint256 collatUpper = 720000; 
-    uint256 collatTarget = 660000;
-    uint256 collatLower = 600000;  
-    uint256 debtUpper = 1030000;
-    uint256 debtLower = 970000;
-    uint256 harvestFee = 50000;
-    uint256 withdrawalFee = 5000; /// only applies when funds are removed from strat & not reserves
+    /// upper limit for fees so owner cannot maliciously increase fees
+    uint256 harvestFeeLimit = 50000;
+    uint256 withdrawalFeeLimit = 5000; /// only applies when funds are removed from strat & not reserves
+    uint256 reserveAllocationLimit =  50000; 
 
     event UpdatedStrategist(address newStrategist);
     event UpdatedKeeper(address newKeeper);
@@ -98,7 +101,7 @@ contract rvUSDC is ERC20, ERC20Detailed, ReentrancyGuard, Ownable, vault {
     
     function setCollateralThresholds(uint256 _lower, uint256 _upper, uint256 _target) external {
         _onlyAuthorized();
-        require(750000 > _upper);
+        require(collatLimit > _upper);
         require(_upper > _target);
         require(_target > _lower);
         collatUpper = _upper; 
@@ -106,17 +109,39 @@ contract rvUSDC is ERC20, ERC20Detailed, ReentrancyGuard, Ownable, vault {
         collatLower = _lower;
     }
     
+    function setFundingAllocations(uint256 _reserveAllocation, uint256 _lendAllocation) external {
+        _onlyAuthorized();
+        
+        uint256 _debtAllocation = decimalAdj.sub(_lendAllocation); 
+        uint256 impliedCollatRatio = _debtAllocation.mul(decimalAdj).div(_lendAllocation);
+        
+        require(_reserveAllocation < reserveAllocationLimit); 
+        require(impliedCollatRatio < collatLimit);
+        reserveAllocation = _reserveAllocation;
+        stratLendAllocation = _lendAllocation;
+        stratDebtAllocation = _debtAllocation; 
+        
+    }
+    
+    function setFees(uint256 _withdrawalFee, uint256 _harvestFee) external {
+        _onlyAuthorized();
+        require(_withdrawalFee < withdrawalFeeLimit);
+        require(_harvestFee < harvestFeeLimit);
+        harvestFee = _harvestFee;
+        withdrawalFee = _withdrawalFee; 
+    }
+    
 
     
     constructor () public ERC20Detailed("vault USDC", "rvUSDC", 18) {
 
-   
+        
     }
     /// this is the withdrawl fee when user withdrawal results in removal of funds from strategy (i.e. withdrawal in excess of reserves)
     function _calcWithdrawalFee(uint256 _r) internal returns(uint256) {
-        uint256 fee = _r.mul(withdrawalFee).div(decimalAdj);
-        return (fee);
-        
+        uint256 _fee = _r.mul(withdrawalFee).div(decimalAdj);
+        return(_fee)
+
     }
     
 
@@ -127,7 +152,7 @@ contract rvUSDC is ERC20, ERC20Detailed, ReentrancyGuard, Ownable, vault {
         ///require(msg.sender == owner, 'only admin');
         uint256 bal = base.balanceOf(address(this)); 
         uint256 totalBal = calcPoolValueInToken();
-        uint256 reserves = totalBal.mul(reservesAllocation).div(decimalAdj);
+        uint256 reserves = totalBal.mul(reserveAllocation).div(decimalAdj);
         if (bal > reserves){
             _deployCapital(bal.sub(reserves));
         }
@@ -137,9 +162,9 @@ contract rvUSDC is ERC20, ERC20Detailed, ReentrancyGuard, Ownable, vault {
     function _deployCapital(uint256 _amount) internal {
         ///require(msg.sender == owner, 'only admin');
         ///uint256 bal = base.balanceOf(address(this)); 
-        uint256 lendDeposit = lendAllocation.mul(_amount).div(decimalAdj);
+        uint256 lendDeposit = stratLendAllocation.mul(_amount).div(decimalAdj);
         _lendBase(lendDeposit); 
-        uint256 borrowAmtBase = borrowAllocation.mul(_amount).div(decimalAdj); 
+        uint256 borrowAmtBase = stratDebtAllocation.mul(_amount).div(decimalAdj); 
         uint256 borrowAmt = _borrowBaseEq(borrowAmtBase);
         _addToLP(borrowAmt);
         _depoistLp();
@@ -339,13 +364,15 @@ contract rvUSDC is ERC20, ERC20Detailed, ReentrancyGuard, Ownable, vault {
         _removeAllLp();
         _repayDebt(); 
         
-        if (balanceDebt() > 0){
+        if (getDebtShort() > 0){
             uint256 debtOutstanding = BORROW(borrow_platform).borrowBalanceStored(address(this));
             _swapBaseShortExact(debtOutstanding);
             _repayDebt();
 
         } else {
+            if (shortToken.balanceOf(address(this)) > 0) {
             _swapShortBase(shortToken.balanceOf(address(this))); 
+            }
         }
     }
     // exits all positions so vault only holds base token
@@ -361,6 +388,6 @@ contract rvUSDC is ERC20, ERC20Detailed, ReentrancyGuard, Ownable, vault {
         exitLeveragePosition();
         _lendBase(base.balanceOf(address(this)));
     }
-    
+        
 
 }
