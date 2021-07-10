@@ -15,8 +15,8 @@ contract rvUSDC is ERC20, ERC20Detailed, ReentrancyGuard, Ownable, vault {
     uint256 lendAllocation = 600000;
     uint256 borrowAllocation = 400000; 
     
-    /// free cash held in base currency as % for speedy withdrawals 
-    uint256 freeCashAllocation = 50000; 
+    /// reserves held in base currency as % for speedy withdrawals 
+    uint256 reservesAllocation = 50000; 
     /// protocal limit & upper, target and lower thresholds for ratio of debt to collateral 
     uint256 collatLimit = 750000;
     uint256 collatUpper = 720000; 
@@ -127,9 +127,9 @@ contract rvUSDC is ERC20, ERC20Detailed, ReentrancyGuard, Ownable, vault {
         ///require(msg.sender == owner, 'only admin');
         uint256 bal = base.balanceOf(address(this)); 
         uint256 totalBal = calcPoolValueInToken();
-        uint256 freeCash = totalBal.mul(freeCashAllocation).div(decimalAdj);
-        if (bal > freeCash){
-            _deployCapital(bal.sub(freeCash));
+        uint256 reserves = totalBal.mul(reservesAllocation).div(decimalAdj);
+        if (bal > reserves){
+            _deployCapital(bal.sub(reserves));
         }
         
     }

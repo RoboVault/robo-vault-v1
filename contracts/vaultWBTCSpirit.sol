@@ -87,33 +87,33 @@ contract vault {
 
         uint256 lpvalue = balanceLp();
         uint256 collateral = balanceLend();
-        uint256 baseInWallet = balanceBase();
-        uint256 debtShort = balanceDebt();
+        uint256 reserves = balanceReserves();
+        uint256 debt = balanceDebt();
         uint256 shortInWallet = balanceShortBaseEq(); 
 
-        return (baseInWallet + collateral +  lpvalue - debtShort + shortInWallet) ; 
+        return (reserves + collateral +  lpvalue - debt + shortInWallet) ; 
 
     }
 
     function calcDebtRatio() public view returns(uint256){
-        uint256 debtShort = balanceDebt();
+        uint256 debt = balanceDebt();
         uint256 lpvalue = balanceLp();
-        uint256 debtRatio = debtShort.div(lpvalue.div(2)).mul(100); 
+        uint256 debtRatio = debt.div(lpvalue.div(2)).mul(100); 
         return (debtRatio);
     }
 
     function calcCollateral() public view returns(uint256){
-        uint256 debtShort = balanceDebt();
+        uint256 debt = balanceDebt();
         uint256 collateral = balanceLend();
-        uint256 collatRatio = debtShort.mul(100).div(collateral); 
+        uint256 collatRatio = debt.mul(100).div(collateral); 
         return (collatRatio);
     }
 
-    function calcFreeCash() public view returns(uint256){
+    function calcReserves() public view returns(uint256){
         uint256 bal = base.balanceOf(address(this)); 
         uint256 totalBal = calcPoolValueInToken();
-        uint256 freeCashRatio = bal.mul(100).div(totalBal);
-        return (freeCashRatio); 
+        uint256 reservesRatio = bal.mul(100).div(totalBal);
+        return (reservesRatio); 
     }
 
     /// get value of all LP in base currency
@@ -129,12 +129,12 @@ contract vault {
     function balanceDebt() public view returns(uint256) {
         uint256 shortLP = _getShortInLp();
         uint256 baseLP = getBaseInLp();
-        uint256 debtShort = BORROW(borrow_platform).borrowBalanceStored(address(this));
-        return (debtShort.mul(baseLP).div(shortLP));
+        uint256 debt = BORROW(borrow_platform).borrowBalanceStored(address(this));
+        return (debt.mul(baseLP).div(shortLP));
         
     }
     
-    function balanceBase() public view returns(uint256){
+    function balanceReserves() public view returns(uint256){
         return (base.balanceOf(address(this)));
     }
     

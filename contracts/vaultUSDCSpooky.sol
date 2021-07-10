@@ -95,35 +95,35 @@ contract vault is ERC20, ERC20Detailed {
 
         uint256 lpvalue = balanceLp();
         uint256 collateral = balanceLend();
-        uint256 baseInWallet = balanceBase();
-        uint256 debtShort = balanceDebt();
+        uint256 reserves = balanceReserves();
+        uint256 debt = balanceDebt();
         uint256 shortInWallet = balanceShortBaseEq(); 
         uint256 pendingRewards = balancePendingHarvest();
 
-        return (baseInWallet + collateral +  lpvalue - debtShort + shortInWallet + pendingRewards) ; 
+        return (reserves + collateral +  lpvalue - debt + shortInWallet + pendingRewards) ; 
 
     }
     // debt ratio - used to trigger rebalancing of debt 
     function calcDebtRatio() public view returns(uint256){
-        uint256 debtShort = balanceDebt();
+        uint256 debt = balanceDebt();
         uint256 lpvalue = balanceLp();
-        uint256 debtRatio = debtShort.mul(decimalAdj).mul(2).div(lpvalue); 
+        uint256 debtRatio = debt.mul(decimalAdj).mul(2).div(lpvalue); 
         return (debtRatio);
     }
     // calculate debt / collateral - used to trigger rebalancing of debt & collateral 
     function calcCollateral() public view returns(uint256){
-        uint256 debtShort = balanceDebt();
+        uint256 debt = balanceDebt();
         uint256 collateral = balanceLend();
-        uint256 collatRatio = debtShort.mul(decimalAdj).div(collateral); 
+        uint256 collatRatio = debt.mul(decimalAdj).div(collateral); 
         return (collatRatio);
     }
 
     // current % of vault assets held in reserve - used to trigger deployment of assets into strategy
-    function calcFreeCash() public view returns(uint256){
+    function calcReserves() public view returns(uint256){
         uint256 bal = base.balanceOf(address(this)); 
         uint256 totalBal = calcPoolValueInToken();
-        uint256 freeCashRatio = bal.mul(decimalAdj).div(totalBal);
-        return (freeCashRatio); 
+        uint256 reservesRatio = bal.mul(decimalAdj).div(totalBal);
+        return (reservesRatio); 
     }
 
     /// get value of all LP in base currency
@@ -139,8 +139,8 @@ contract vault is ERC20, ERC20Detailed {
     function balanceDebt() public view returns(uint256) {
         uint256 shortLP = _getShortInLp();
         uint256 baseLP = getBaseInLp();
-        uint256 debtShort = BORROW(borrow_platform).borrowBalanceStored(address(this));
-        return (debtShort.mul(baseLP).div(shortLP));
+        uint256 debt = BORROW(borrow_platform).borrowBalanceStored(address(this));
+        return (debt.mul(baseLP).div(shortLP));
         
     }
     
@@ -157,7 +157,7 @@ contract vault is ERC20, ERC20Detailed {
     }
     
     // reserves 
-    function balanceBase() public view returns(uint256){
+    function balanceReserves() public view returns(uint256){
         return (base.balanceOf(address(this)));
     }
     
