@@ -168,6 +168,7 @@ contract vault is ERC20, ERC20Detailed {
         uint256 b = lend_tokens.balanceOf(address(this));
         return (b.mul(LEND(lendPlatform).exchangeRateStored()).div(1e18));
     }
+
     // lend base tokens to lending platform 
     function _lendBase(uint256 amount) public {
         LEND(lendPlatform).mint(amount);
@@ -210,7 +211,6 @@ contract vault is ERC20, ERC20Detailed {
     function getDebtShort() public returns(uint256) {
         uint256 _debt =  BORROW(borrow_platform).borrowBalanceStored(address(this)); 
         return(_debt);
-        
     }
     
     function _getShortInLp() public view returns (uint256) {
@@ -249,7 +249,6 @@ contract vault is ERC20, ERC20Detailed {
     
     // withdraws some LP worth _amount, converts all withdrawn LP to short token to repay debt 
     function _withdrawLpRebalance(uint256 _amount) public {
-        uint256 lpValue = balanceLp(); 
         uint256 lpUnpooled =  lp.balanceOf(address(this)); 
         uint256 lpPooled = countLpPooled();
         uint256 lpCount = lpUnpooled.add(lpPooled);
@@ -273,7 +272,6 @@ contract vault is ERC20, ERC20Detailed {
     
     //  withdraws some LP worth _amount, uses withdrawn LP to add to collateral & repay debt 
     function _withdrawLpRebalanceCollateral(uint256 _amount) public {
-        uint256 lpValue = balanceLp(); 
         uint256 lpUnpooled =  lp.balanceOf(address(this)); 
         uint256 lpPooled = countLpPooled();
         uint256 lpCount = lpUnpooled.add(lpPooled);

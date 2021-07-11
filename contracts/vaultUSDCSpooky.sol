@@ -53,8 +53,7 @@ contract vault is ERC20, ERC20Detailed {
     uint256 decimalAdj = 1000000; /// variable used when calculating (equivant to 1 / 100% for float like operations )
     uint256 slippageAdj = 990000;
     uint256 slippageAdjHigh = 1010000;
-    
-    ///USDC / CREAM
+
     /// base token specific info
     address  USDC = 0x04068DA6C83AFCFA0e13ba15A6696662335D5B75;
     address  lendPlatform = 0x328A7b4d538A2b3942653a9983fdA3C12c571141; // platform for addding base token as collateral
@@ -209,9 +208,8 @@ contract vault is ERC20, ERC20Detailed {
     }
     
     function getDebtShort() public returns(uint256) {
-        uint256 _debt =  BORROW(borrow_platform).borrowBalanceStored(address(this)); 
+        uint256 _debt = BORROW(borrow_platform).borrowBalanceStored(address(this)); 
         return(_debt);
-        
     }
     
     function _getShortInLp() public view returns (uint256) {

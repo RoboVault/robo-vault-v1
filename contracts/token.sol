@@ -1,6 +1,6 @@
 pragma solidity ^0.5.0;
 
-import "./vaultUSDCSpooky.sol";
+import "./vault.sol";
 import "./vaultHelpers.sol";
 
 
@@ -31,6 +31,13 @@ contract rvUSDC is ERC20, ERC20Detailed, ReentrancyGuard, Ownable, vault {
 
     event UpdatedStrategist(address newStrategist);
     event UpdatedKeeper(address newKeeper);
+    
+    constructor (ERC20Detailed obj) public 
+        vault(address(0x04068DA6C83AFCFA0e13ba15A6696662335D5B75)) 
+        ERC20Detailed("vault USDC", "rvUSDC", 18) 
+    {
+     
+    }
 
     // modifiers 
     function _onlyAuthorized() internal view {
@@ -57,21 +64,21 @@ contract rvUSDC is ERC20, ERC20Detailed, ReentrancyGuard, Ownable, vault {
         _onlyAuthorized();
         base.safeApprove(address(lendPlatform), uint256(-1));
         shortToken.safeApprove(address(borrow_platform), uint256(-1));
-        base.safeApprove(routerAddress, uint256(-1));
-        shortToken.safeApprove(routerAddress, uint256(-1));
-        harvestToken.safeApprove(routerAddress, uint256(-1));
-        lp.safeApprove(routerAddress, uint256(-1));
-        lp.approve(address(farm), uint256(-1));
+        base.safeApprove(RouterAddress, uint256(-1));
+        shortToken.safeApprove(RouterAddress, uint256(-1));
+        harvestToken.safeApprove(RouterAddress, uint256(-1));
+        lp.safeApprove(RouterAddress, uint256(-1));
+        lp.approve(address(FarmAddress), uint256(-1));
     }
         
     function resetApprovals( ) external {
         _onlyAuthorized();
         base.safeApprove(address(lendPlatform), 0);
         shortToken.safeApprove(address(borrow_platform), 0);
-        base.safeApprove(routerAddress, 0);
-        shortToken.safeApprove(routerAddress, 0);
-        harvestToken.safeApprove(routerAddress, 0);
-        lp.safeApprove(routerAddress, 0);
+        base.safeApprove(RouterAddress, 0);
+        shortToken.safeApprove(RouterAddress, 0);
+        harvestToken.safeApprove(RouterAddress, 0);
+        lp.safeApprove(RouterAddress, 0);
     }
     
     /// update strategist -> this is the address that receives fees + can complete rebalancing and update strategy thresholds
@@ -128,13 +135,6 @@ contract rvUSDC is ERC20, ERC20Detailed, ReentrancyGuard, Ownable, vault {
         require(_harvestFee < harvestFeeLimit);
         harvestFee = _harvestFee;
         withdrawalFee = _withdrawalFee; 
-    }
-    
-
-    
-    constructor () public ERC20Detailed("vault USDC", "rvUSDC", 18) {
-
-        
     }
     /// this is the withdrawl fee when user withdrawal results in removal of funds from strategy (i.e. withdrawal in excess of reserves)
     function _calcWithdrawalFee(uint256 _r) internal view returns(uint256) {
@@ -324,7 +324,7 @@ contract rvUSDC is ERC20, ERC20Detailed, ReentrancyGuard, Ownable, vault {
         /// harvest from farm & based on amt borrowed vs LP value either -> repay some debt or add to collateral
         _onlyKeepers();
         //FARM(farm).deposit(pid, 0); /// for spirit swap call deposit with amt = 0
-        FARM(farm).withdraw(pid, 0); /// for spooky swap call withdraw with amt = 0
+        Farm.withdraw(pid, 0); /// for spooky swap call withdraw with amt = 0
         
         if (calcDebtRatio() < decimalAdj){
             /// more 
