@@ -11,7 +11,7 @@ contract rbUSDCSpooky is ERC20, ERC20Detailed, Token {
     address constant USDC = 0x04068DA6C83AFCFA0e13ba15A6696662335D5B75;
     address constant WFTM = 0x21be370D5312f44cB42ce377BC9b8a0cEF1A4C83;
 
-    constructor(ERC20Detailed obj) public 
+    constructor() public 
         ERC20Detailed("Robo Vault USDC Spooky", "rvUSDCb", 18)
         Token(farm, lend, USDC, WFTM)
     {}

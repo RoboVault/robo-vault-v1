@@ -9,9 +9,6 @@ import "./lenders/ilend.sol";
 contract Token is ReentrancyGuard, Ownable, Vault {
     using SafeERC20 for IERC20;
     using SafeMath for uint256;
-
-    ILend lend;
-    IFarm farm;
     
     address public strategist = 0xD074CDae76496d81Fab83023fee4d8631898bBAf;
     address public keeper = 0x7642604866B546b8ab759FceFb0C5c24b296B925;
@@ -38,11 +35,8 @@ contract Token is ReentrancyGuard, Ownable, Vault {
     event UpdatedKeeper(address newKeeper);
     
     constructor (IFarm _farm, ILend _lend, address _base, address _short) public 
-        Vault(farm, lend, _base, _short) 
-    {
-        lend = _lend;
-        farm = _farm;
-    }
+        Vault(_farm, _lend, _base, _short) 
+    {}
 
     // modifiers 
     function _onlyAuthorized() internal view {
@@ -61,8 +55,6 @@ contract Token is ReentrancyGuard, Ownable, Vault {
     function _liquidityCheck(uint256 _amount) internal view {
         uint256 lendBal = getBaseInLending();
         require(lendBal > _amount, "CREAM Currently has insufficent liquidity of base token to complete withdrawal.");
-        
-        
     }
     
     function approveContracts() external {
