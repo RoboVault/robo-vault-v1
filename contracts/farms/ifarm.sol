@@ -1,4 +1,5 @@
 pragma solidity ^0.5.0;
+import "../vaultHelpers.sol";
 
 contract IFarm {
     address public FarmAddress; 
@@ -8,6 +9,12 @@ contract IFarm {
     address public LP; /// LP contract for base & short token
     uint256 public pid; /// iquidity Pool ID
 
+    /*
+     * Farm specific methods
+     * @todo: Move to a IPaths abstract class that's vault specific
+     */
+    function basePath(IERC20 _harvestToken, IERC20 _shortToken, IERC20 _base) external view returns (address[] memory);
+    
     /*
      * Farming Methods
      */

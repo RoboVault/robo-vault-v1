@@ -2,22 +2,16 @@ pragma solidity ^0.5.0;
 
 import "./vault.sol";
 import "./vaultHelpers.sol";
-import "./farms/spirit.sol";
-import "./lenders/cream.sol";
+import "./farms/ifarm.sol";
+import "./lenders/ilend.sol";
 
 
-contract rbUSDC is ERC20, ERC20Detailed, ReentrancyGuard, Ownable, Vault {
+contract Token is ReentrancyGuard, Ownable, Vault {
     using SafeERC20 for IERC20;
     using SafeMath for uint256;
 
-    Cream lender = new Cream();
-    Spirit farm = new Spirit();
-
-    // TODO Remove
-    address public constant lendPlatform = 0x328A7b4d538A2b3942653a9983fdA3C12c571141; // platform for addding base token as collateral
-    address public constant RouterAddress = 0x16327E3FbDaCA3bcF7E38F5Af2599D2DDc33aE52;
-    address public constant borrow_platform = 0xd528697008aC67A21818751A5e3c58C8daE54696;
-    address public constant FarmAddress = 0x9083EA3756BDE6Ee6f27a6e996806FBD37F6F093;
+    ILend lend;
+    IFarm farm;
     
     address public strategist = 0xD074CDae76496d81Fab83023fee4d8631898bBAf;
     address public keeper = 0x7642604866B546b8ab759FceFb0C5c24b296B925;
@@ -33,24 +27,21 @@ contract rbUSDC is ERC20, ERC20Detailed, ReentrancyGuard, Ownable, Vault {
     uint256 public withdrawalFee = 5000;
     uint256 public reserveAllocation = 50000;
 
-    address WFTM = 0x21be370D5312f44cB42ce377BC9b8a0cEF1A4C83;
-    address USDC = 0x04068DA6C83AFCFA0e13ba15A6696662335D5B75;
-    
     /// protocal limits & upper, target and lower thresholds for ratio of debt to collateral 
-    uint256 collatLimit = 750000;
+    uint256 constant collatLimit = 750000;
     /// upper limit for fees so owner cannot maliciously increase fees
-    uint256 harvestFeeLimit = 50000;
-    uint256 withdrawalFeeLimit = 5000; /// only applies when funds are removed from strat & not reserves
-    uint256 reserveAllocationLimit =  50000; 
+    uint256 constant harvestFeeLimit = 50000;
+    uint256 constant withdrawalFeeLimit = 5000; /// only applies when funds are removed from strat & not reserves
+    uint256 constant reserveAllocationLimit =  50000; 
 
     event UpdatedStrategist(address newStrategist);
     event UpdatedKeeper(address newKeeper);
     
-    constructor (ERC20Detailed obj) public 
-        Vault(farm, lender, USDC, WFTM) 
-        ERC20Detailed("vault USDC", "rvUSDC", 18)
+    constructor (IFarm _farm, ILend _lend, address _base, address _short) public 
+        Vault(farm, lend, _base, _short) 
     {
-     
+        lend = _lend;
+        farm = _farm;
     }
 
     // modifiers 
@@ -76,23 +67,23 @@ contract rbUSDC is ERC20, ERC20Detailed, ReentrancyGuard, Ownable, Vault {
     
     function approveContracts() external {
         _onlyAuthorized();
-        base.safeApprove(address(lendPlatform), uint256(-1));
-        shortToken.safeApprove(address(borrow_platform), uint256(-1));
-        base.safeApprove(RouterAddress, uint256(-1));
-        shortToken.safeApprove(RouterAddress, uint256(-1));
-        harvestToken.safeApprove(RouterAddress, uint256(-1));
-        lp.safeApprove(RouterAddress, uint256(-1));
-        lp.approve(address(FarmAddress), uint256(-1));
+        base.safeApprove(address(lend.LendPlatform), uint256(-1));
+        shortToken.safeApprove(address(lend.BorrowPlatform()), uint256(-1));
+        base.safeApprove(farm.RouterAddress(), uint256(-1));
+        shortToken.safeApprove(farm.RouterAddress(), uint256(-1));
+        harvestToken.safeApprove(farm.RouterAddress(), uint256(-1));
+        lp.safeApprove(farm.RouterAddress(), uint256(-1));
+        lp.approve(address(farm.FarmAddress()), uint256(-1));
     }
         
     function resetApprovals( ) external {
         _onlyAuthorized();
-        base.safeApprove(address(lendPlatform), 0);
-        shortToken.safeApprove(address(borrow_platform), 0);
-        base.safeApprove(RouterAddress, 0);
-        shortToken.safeApprove(RouterAddress, 0);
-        harvestToken.safeApprove(RouterAddress, 0);
-        lp.safeApprove(RouterAddress, 0);
+        base.safeApprove(address(lend.LendPlatform), 0);
+        shortToken.safeApprove(address(lend.BorrowPlatform()), 0);
+        base.safeApprove(farm.RouterAddress(), 0);
+        shortToken.safeApprove(farm.RouterAddress(), 0);
+        harvestToken.safeApprove(farm.RouterAddress(), 0);
+        lp.safeApprove(farm.RouterAddress(), 0);
     }
     
     /// update strategist -> this is the address that receives fees + can complete rebalancing and update strategy thresholds
@@ -368,7 +359,7 @@ contract rbUSDC is ERC20, ERC20Detailed, ReentrancyGuard, Ownable, Vault {
         _repayDebt(); 
         
         if (getDebtShort() > 0){
-            uint256 debtOutstanding = BORROW(borrow_platform).borrowBalanceStored(address(this));
+            uint256 debtOutstanding = lend.borrowBalanceStored(address(this));
             _swapBaseShortExact(debtOutstanding);
             _repayDebt();
 

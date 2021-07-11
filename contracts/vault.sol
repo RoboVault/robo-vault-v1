@@ -12,7 +12,7 @@ contract Vault is ERC20, ERC20Detailed {
     uint256 constant slippageAdjHigh = 1010000;
 
     IERC20 base;
-    ILend lender;
+    ILend lend;
     IFarm farm;
     
     IERC20 shortToken;
@@ -21,16 +21,16 @@ contract Vault is ERC20, ERC20Detailed {
     IERC20 harvestToken;
     IERC20 lend_tokens;
 
-    constructor(IFarm _farm, ILend _lender, address _baseToken, address _shortToken) public  {
+    constructor(IFarm _farm, ILend _lend, address _baseToken, address _shortToken) public  {
         farm = _farm;
-        lender = _lender;
+        lend = _lend;
         shortToken = IERC20(_shortToken);
         lp = IERC20(farm.LP());
         lp_harvestToken = IERC20(farm.TokenLp()); 
         harvestToken = IERC20(farm.Token());
-        lend_tokens = IERC20(lender.LendPlatform()); 
+        lend_tokens = IERC20(lend.LendPlatform()); 
         base = IERC20(_baseToken);
-        lender.enterMarkets();
+        lend.enterMarkets();
     }
     
     /// calculate total value of vault assets 
@@ -82,7 +82,7 @@ contract Vault is ERC20, ERC20Detailed {
     function balanceDebt() public view returns(uint256) {
         uint256 shortLP = _getShortInLp();
         uint256 baseLP = getBaseInLp();
-        uint256 debt = lender.borrowBalanceStored(address(this));
+        uint256 debt = lend.borrowBalanceStored(address(this));
         return (debt.mul(baseLP).div(shortLP));
     }
     
@@ -114,12 +114,12 @@ contract Vault is ERC20, ERC20Detailed {
     
     function balanceLend() public view returns(uint256){
         uint256 b = lend_tokens.balanceOf(address(this));
-        return (b.mul(lender.exchangeRateStored()).div(1e18));
+        return (b.mul(lend.exchangeRateStored()).div(1e18));
     }
 
     // lend base tokens to lending platform 
     function _lendBase(uint256 amount) public {
-        lender.mint(amount);
+        lend.mint(amount);
     }
     
     // borrow tokens woth _amount of base tokens 
@@ -133,18 +133,18 @@ contract Vault is ERC20, ERC20Detailed {
     }
 
     function _borrow(uint256 borrowAmount) public {
-        lender.borrow(borrowAmount);
+        lend.borrow(borrowAmount);
     }
     
     // automatically repays debt using any short tokens held in wallet up to total debt value
     function _repayDebt() public {
         uint256 _bal = shortToken.balanceOf(address(this)); 
-        uint256 _debt =  lender.borrowBalanceStored(address(this)); 
+        uint256 _debt =  lend.borrowBalanceStored(address(this)); 
         if (_bal < _debt){
-            lender.repayBorrow(_bal);
+            lend.repayBorrow(_bal);
         }
         else {
-            lender.repayBorrow(_debt);
+            lend.repayBorrow(_debt);
         }
     }
     
@@ -157,7 +157,7 @@ contract Vault is ERC20, ERC20Detailed {
     }
     
     function getDebtShort() public returns(uint256) {
-        uint256 _debt =  lender.borrowBalanceStored(address(this)); 
+        uint256 _debt =  lend.borrowBalanceStored(address(this)); 
         return(_debt);
     }
     
@@ -167,7 +167,7 @@ contract Vault is ERC20, ERC20Detailed {
     }
     
     function getBaseInLending() public view returns (uint256) {
-        uint256 bal = base.balanceOf(address(lender.LendPlatform));
+        uint256 bal = base.balanceOf(address(lend.LendPlatform));
         return(bal);
     }
     
@@ -187,7 +187,7 @@ contract Vault is ERC20, ERC20Detailed {
     }
     
     function _redeemBase(uint256 _redeem_amount) public {
-        lender.redeemUnderlying(_redeem_amount); 
+        lend.redeemUnderlying(_redeem_amount); 
     }
 
     function countLpPooled() public view returns(uint256){
@@ -283,10 +283,7 @@ contract Vault is ERC20, ERC20Detailed {
     
     // below functions interact with AMM converting Harvest Rewards & Swapping between base & short token as required for rebalancing 
     function _sellHarvestBase() public returns (uint256) {
-        address[] memory pathBase = new address[](3);
-        pathBase[0] = address(harvestToken);
-        pathBase[1] = address(shortToken);
-        pathBase[2] = address(base);
+        address[] memory pathBase = farm.basePath(harvestToken, shortToken, base);
         
         uint256 harvestBalance = harvestToken.balanceOf(address(this)); 
         uint256 harvestLP_A = _getHarvestInHarvestLp();
