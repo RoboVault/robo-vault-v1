@@ -1,58 +1,36 @@
 pragma solidity ^0.5.0;
 import "./vaultHelpers.sol";
-import "./farms/spirit.sol";
-import "./lenders/cream.sol";
+import "./farms/ifarm.sol";
+import "./lenders/ilend.sol";
 
-
-interface LEND {
-    /// interface for depositing into CREAM
-    function mint(uint256 mintAmount) external; 
-    function redeem(uint redeemTokens) external; 
-    function redeemUnderlying(uint redeemAmount) external; 
-    function balanceOf(address owner) external view returns (uint256); 
-    function exchangeRateCurrent() external view returns (uint256);
-    function exchangeRateStored() external view returns (uint);
-    function getCash() external view returns (uint);
-    function balanceOfUnderlying(address) external view returns (uint256);
-}
-
-interface Icomptroller {
-  function enterMarkets(address[] calldata cTokens) external returns (uint[] memory);
-}
-
-contract vault is ERC20, ERC20Detailed, Farm, Lend {
+contract Vault is ERC20, ERC20Detailed {
     using SafeERC20 for IERC20;
     using SafeMath for uint256;
 
-    uint256 decimalAdj = 1000000; /// variable used when calculating (equivant to 1 / 100% for float like operations )
-    uint256 slippageAdj = 990000;
-    uint256 slippageAdjHigh = 1010000;
-    
-    /// base token specific info
-    address  lendPlatform = 0x328A7b4d538A2b3942653a9983fdA3C12c571141; // platform for addding base token as collateral
-    address  LP = 0xe7E90f5a767406efF87Fdad7EB07ef407922EC1D; /// LP contract for base & short token
-    uint256  pid  =  4; 
-    
+    uint256 constant decimalAdj = 1000000; /// variable used when calculating (equivant to 1 / 100% for float like operations )
+    uint256 constant slippageAdj = 990000;
+    uint256 constant slippageAdjHigh = 1010000;
 
-    // address baseAddress
     IERC20 base;
-
-    address  WFTM = 0x21be370D5312f44cB42ce377BC9b8a0cEF1A4C83;
-    address  borrow_platform = 0xd528697008aC67A21818751A5e3c58C8daE54696;
-    address  comptrollerAddress = 0x4250A6D3BD57455d7C6821eECb6206F507576cD2; /// Cream Comptroller 
+    ILend lender;
+    IFarm farm;
     
-    IERC20 shortToken = IERC20(WFTM);
-    IERC20 lp = IERC20(LP);
-    IERC20 lp_harvestToken = IERC20(Farm.TokenLp); 
-    IERC20 harvestToken = IERC20(Farm.Token);
-    IERC20 lend_tokens = IERC20(lendPlatform);
+    IERC20 shortToken;
+    IERC20 lp;
+    IERC20 lp_harvestToken;
+    IERC20 harvestToken;
+    IERC20 lend_tokens;
 
-    constructor(address _baseAddress) public  {
-        base = IERC20(_baseAddress);
-        Icomptroller comptroller = Icomptroller(comptrollerAddress);
-        address[] memory cTokens = new address[](1);
-        cTokens[0] = 0x328A7b4d538A2b3942653a9983fdA3C12c571141; 
-        comptroller.enterMarkets(cTokens);
+    constructor(IFarm _farm, ILend _lender, address _baseToken, address _shortToken) public  {
+        farm = _farm;
+        lender = _lender;
+        shortToken = IERC20(_shortToken);
+        lp = IERC20(farm.LP());
+        lp_harvestToken = IERC20(farm.TokenLp()); 
+        harvestToken = IERC20(farm.Token());
+        lend_tokens = IERC20(lender.LendPlatform()); 
+        base = IERC20(_baseToken);
+        lender.enterMarkets();
     }
     
     /// calculate total value of vault assets 
@@ -104,12 +82,12 @@ contract vault is ERC20, ERC20Detailed, Farm, Lend {
     function balanceDebt() public view returns(uint256) {
         uint256 shortLP = _getShortInLp();
         uint256 baseLP = getBaseInLp();
-        uint256 debt = BORROW(Borrow.borrow_platform).borrowBalanceStored(address(this));
+        uint256 debt = lender.borrowBalanceStored(address(this));
         return (debt.mul(baseLP).div(shortLP));
     }
     
     function balancePendingHarvest() public view returns(uint256){
-        uint256 rewardsPending = Farm.pendingRewards(pid, address(this));
+        uint256 rewardsPending = farm.pendingRewards(farm.pid(), address(this));
         uint256 harvestLP_A = _getHarvestInHarvestLp();
         uint256 shortLP_A = _getShortInHarvestLp();
         uint256 shortLP_B = _getShortInLp();
@@ -136,12 +114,12 @@ contract vault is ERC20, ERC20Detailed, Farm, Lend {
     
     function balanceLend() public view returns(uint256){
         uint256 b = lend_tokens.balanceOf(address(this));
-        return (b.mul(LEND(lendPlatform).exchangeRateStored()).div(1e18));
+        return (b.mul(lender.exchangeRateStored()).div(1e18));
     }
 
     // lend base tokens to lending platform 
     function _lendBase(uint256 amount) public {
-        LEND(lendPlatform).mint(amount);
+        lender.mint(amount);
     }
     
     // borrow tokens woth _amount of base tokens 
@@ -155,18 +133,18 @@ contract vault is ERC20, ERC20Detailed, Farm, Lend {
     }
 
     function _borrow(uint256 borrowAmount) public {
-        BORROW(borrow_platform).borrow(borrowAmount);
+        lender.borrow(borrowAmount);
     }
     
     // automatically repays debt using any short tokens held in wallet up to total debt value
     function _repayDebt() public {
         uint256 _bal = shortToken.balanceOf(address(this)); 
-        uint256 _debt =  BORROW(borrow_platform).borrowBalanceStored(address(this)); 
+        uint256 _debt =  lender.borrowBalanceStored(address(this)); 
         if (_bal < _debt){
-            BORROW(borrow_platform).repayBorrow(_bal);
+            lender.repayBorrow(_bal);
         }
         else {
-            BORROW(borrow_platform).repayBorrow(_debt);
+            lender.repayBorrow(_debt);
         }
     }
     
@@ -179,7 +157,7 @@ contract vault is ERC20, ERC20Detailed, Farm, Lend {
     }
     
     function getDebtShort() public returns(uint256) {
-        uint256 _debt =  BORROW(borrow_platform).borrowBalanceStored(address(this)); 
+        uint256 _debt =  lender.borrowBalanceStored(address(this)); 
         return(_debt);
     }
     
@@ -189,7 +167,7 @@ contract vault is ERC20, ERC20Detailed, Farm, Lend {
     }
     
     function getBaseInLending() public view returns (uint256) {
-        uint256 bal = base.balanceOf(address(lendPlatform));
+        uint256 bal = base.balanceOf(address(lender.LendPlatform));
         return(bal);
     }
     
@@ -209,11 +187,11 @@ contract vault is ERC20, ERC20Detailed, Farm, Lend {
     }
     
     function _redeemBase(uint256 _redeem_amount) public {
-        LEND(lendPlatform).redeemUnderlying(_redeem_amount); 
+        lender.redeemUnderlying(_redeem_amount); 
     }
 
     function countLpPooled() public view returns(uint256){
-        uint256 lpPooled = Farm.userInfo(pid, address(this));
+        uint256 lpPooled = farm.userInfo(farm.pid(), address(this));
         return lpPooled;
     }
     
@@ -264,7 +242,7 @@ contract vault is ERC20, ERC20Detailed, Farm, Lend {
     }
     
     function _addToLpFull(uint256 amountADesired, uint256 amountBDesired, uint256 amountAMin, uint256 amountBMin) internal {
-        Farm.addLiquidity(address(shortToken), address(base), amountADesired, amountBDesired, amountAMin, amountBMin, address(this), block.timestamp + 15); /// add liquidity 
+        farm.addLiquidity(address(shortToken), address(base), amountADesired, amountBDesired, amountAMin, amountBMin, address(this), block.timestamp + 15); /// add liquidity 
     }
     
     function _addToLP(uint256 _amountShort) public {
@@ -276,12 +254,12 @@ contract vault is ERC20, ERC20Detailed, Farm, Lend {
     
     function _depoistLp() public {
         uint256 lpBalance = lp.balanceOf(address(this)); /// get number of LP tokens
-        Farm.deposit(pid, lpBalance); /// deposit LP tokens to farm
+        farm.deposit(farm.pid(), lpBalance); /// deposit LP tokens to farm
     }
 
     function _withdrawSomeLp(uint256 _amount) public {
         require(_amount <= countLpPooled());
-        Farm.withdraw(pid, _amount);
+        farm.withdraw(farm.pid(), _amount);
     }
     
     // all LP currently not in Farm is removed 
@@ -294,13 +272,13 @@ contract vault is ERC20, ERC20Detailed, Farm, Lend {
 
         uint256 amountAMin = _amount.mul(shortLP).div(lpIssued).mul(slippageAdj).div(decimalAdj);
         uint256 amountBMin = _amount.mul(baseLP).div(lpIssued).mul(slippageAdj).div(decimalAdj);
-        Farm.removeLiquidity(address(shortToken), address(base), _amount, amountAMin, amountBMin,address(this), block.timestamp + 15);
+        farm.removeLiquidity(address(shortToken), address(base), _amount, amountAMin, amountBMin,address(this), block.timestamp + 15);
     }
     
     function _withdrawAllPooled() public {
         ///require(msg.sender == owner, 'only admin'); 
         uint256 lpPooled = countLpPooled();
-        Farm.withdraw(pid, lpPooled);
+        farm.withdraw(farm.pid(), lpPooled);
     }
     
     // below functions interact with AMM converting Harvest Rewards & Swapping between base & short token as required for rebalancing 
@@ -318,7 +296,7 @@ contract vault is ERC20, ERC20Detailed, Farm, Lend {
         
         uint256 amountOutMinamountOutShort = harvestBalance.mul(shortLP_A).div(harvestLP_A);
         uint256 amountOutMin = amountOutMinamountOutShort.mul(baseLP_B).div(shortLP_B).mul(slippageAdj).div(decimalAdj);
-        Farm.swapExactTokensForTokens(harvestBalance, amountOutMin, pathBase, address(this), block.timestamp + 120);
+        farm.swapExactTokensForTokens(harvestBalance, amountOutMin, pathBase, address(this), block.timestamp + 120);
         return (amountOutMin);
     }
 
@@ -331,7 +309,7 @@ contract vault is ERC20, ERC20Detailed, Farm, Lend {
         uint256 harvestLP = _getHarvestInHarvestLp();
         uint256 shortLP = _getShortInHarvestLp();
         uint256 amountOutMin = harvestBalance.mul(shortLP).mul(slippageAdj).div(harvestLP).div(decimalAdj);
-        Farm.swapExactTokensForTokens(harvestBalance, amountOutMin, pathShort, address(this), block.timestamp + 120);
+        farm.swapExactTokensForTokens(harvestBalance, amountOutMin, pathShort, address(this), block.timestamp + 120);
     }
 
     function _swapBaseShort(uint256 _amount) public {
@@ -342,7 +320,7 @@ contract vault is ERC20, ERC20Detailed, Farm, Lend {
         uint256 shortLP = _getShortInLp();
         uint256 baseLP = getBaseInLp();
         uint256 amountOutMin = _amount.mul(shortLP).mul(slippageAdj).div(baseLP).div(decimalAdj);
-        Farm.swapExactTokensForTokens(_amount, amountOutMin, pathSwap, address(this), block.timestamp + 120);
+        farm.swapExactTokensForTokens(_amount, amountOutMin, pathSwap, address(this), block.timestamp + 120);
     }
     
     function _swapShortBase(uint256 _amount) public {
@@ -353,7 +331,7 @@ contract vault is ERC20, ERC20Detailed, Farm, Lend {
         uint256 shortLP = _getShortInLp();
         uint256 baseLP = getBaseInLp();
         uint256 amountOutMin = _amount.mul(baseLP).mul(slippageAdj).div(decimalAdj).div(shortLP);
-        Farm.swapExactTokensForTokens(_amount, amountOutMin, pathSwap, address(this), block.timestamp + 120);
+        farm.swapExactTokensForTokens(_amount, amountOutMin, pathSwap, address(this), block.timestamp + 120);
     }
     
     function _swapBaseShortExact(uint256 _amountOut) public {
@@ -364,7 +342,7 @@ contract vault is ERC20, ERC20Detailed, Farm, Lend {
         uint256 shortLP = _getShortInLp();
         uint256 baseLP = getBaseInLp();
         uint256 amountInMax = _amountOut.mul(baseLP).mul(slippageAdjHigh).div(decimalAdj).div(shortLP);
-        Farm.swapExactTokensForTokens(_amountOut, amountInMax, pathSwap, address(this), block.timestamp + 120);
+        farm.swapExactTokensForTokens(_amountOut, amountInMax, pathSwap, address(this), block.timestamp + 120);
     }
 }
 

@@ -1,41 +1,84 @@
 pragma solidity ^0.5.0;
 import "../vaultHelpers.sol";
+import "./ilend.sol";
 
 interface BORROW {
     /// interface for borrowing from CREAM
     function borrow(uint256 borrowAmount) external returns (uint256); 
     function borrowBalanceStored(address account) external view returns (uint);
-    function repayBorrow(uint repayAmount) external ; /// borrowAmount: The amount of the underlying borrowed asset to be repaid. A value of -1 (i.e. 2^256 - 1) can be used to repay the full amount.
+    function repayBorrow(uint repayAmount) external; /// borrowAmount: The amount of the underlying borrowed asset to be repaid. A value of -1 (i.e. 2^256 - 1) can be used to repay the full amount.
 }
 
-contract Lend {
-    using SafeMath for uint256;
-    
-    /// base token specific info
-    // address WBTC = 0x321162Cd933E2Be498Cd2267a90534A804051b11;
-    // address lendPlatform = 0x20CA53E2395FA571798623F1cFBD11Fe2C114c24; // platform for addding base token as collateral
-    // address LP = 0x279b2c897737a50405ED2091694F225D83F2D3bA; /// LP contract for wbtc & wftm 
-    // uint256 pid  =  2; 
-    // IERC20 base = IERC20(WBTC);
-    
-    // address WFTM = 0x21be370D5312f44cB42ce377BC9b8a0cEF1A4C83;
-    address borrow_platform = 0xd528697008aC67A21818751A5e3c58C8daE54696;
-    // address comptrollerAddress = 0x4250A6D3BD57455d7C6821eECb6206F507576cD2; /// Cream Comptroller 
-    // address SpiritRouter = 0x16327E3FbDaCA3bcF7E38F5Af2599D2DDc33aE52;
-    // address SpiritMaster = 0x9083EA3756BDE6Ee6f27a6e996806FBD37F6F093;
-    // address routerAddress = SpiritRouter; 
-    // address farm = SpiritMaster; /// spirit masterchef 
-    // address Spirit = 0x5Cc61A78F164885776AA610fb0FE1257df78E59B; 
-    // address SpiritLP = 0x30748322B6E34545DBe0788C421886AEB5297789;
-    
-    // IERC20 shortToken = IERC20(WFTM);
-    // IERC20 lp = IERC20(LP);
-    // IERC20 lp_harvestToken = IERC20(SpiritLP); 
-    // IERC20 harvestToken = IERC20(Spirit);
-    // IERC20 lend_tokens = IERC20(lendPlatform);
-    // function borrowBalanceStored(address account) external view returns (uint)
+interface LEND {
+    /// interface for depositing into CREAM
+    function mint(uint256 mintAmount) external; 
+    function redeem(uint redeemTokens) external; 
+    function redeemUnderlying(uint redeemAmount) external; 
+    function balanceOf(address owner) external view returns (uint256); 
+    function exchangeRateCurrent() external view returns (uint256);
+    function exchangeRateStored() external view returns (uint);
+    function getCash() external view returns (uint);
+    function balanceOfUnderlying(address addr) external view returns (uint256);
+}
 
+interface Icomptroller {
+  function enterMarkets(address[] calldata cTokens) external returns (uint[] memory);
+}
+
+contract Cream is ILend {
+    /// Lend and Borrow wrapper for cream 
+    using SafeMath for uint256;
+    address public constant BorrowPlatform = 0xd528697008aC67A21818751A5e3c58C8daE54696;
+    address public constant LendPlatform = 0x328A7b4d538A2b3942653a9983fdA3C12c571141; 
+    address public constant ComptrollerAddress = 0x4250A6D3BD57455d7C6821eECb6206F507576cD2; /// Cream Comptroller 
+
+    function enterMarkets() external {
+        Icomptroller comptroller = Icomptroller(ComptrollerAddress);
+        address[] memory cTokens = new address[](1);
+        cTokens[0] = LendPlatform;
+        comptroller.enterMarkets(cTokens);
+    }
     
+    /*
+    * Borrow Methods
+    */
+    function borrow(uint256 _borrowAmount) external returns (uint256) {
+        return BORROW(BorrowPlatform).borrow(_borrowAmount);
+    } 
+    function borrowBalanceStored(address _account) external view returns (uint) {
+        return BORROW(BorrowPlatform).borrowBalanceStored(_account);
+    }
+    function repayBorrow(uint _repayAmount) external {
+        BORROW(BorrowPlatform).repayBorrow(_repayAmount);
+    }
+
+    /*
+    * Lend Methods
+    */
+    function mint(uint256 _mintAmount) external {
+        LEND(LendPlatform).mint(_mintAmount);
+    }
+    function redeem(uint _redeemTokens) external {
+        LEND(LendPlatform).redeem(_redeemTokens);
+    }
+    function redeemUnderlying(uint _redeemAmount) external {
+        LEND(LendPlatform).redeemUnderlying(_redeemAmount);
+    }
+    function balanceOf(address _owner) external view returns (uint256) {
+        return LEND(LendPlatform).balanceOf(_owner);
+    }
+    function exchangeRateCurrent() external view returns (uint256) {
+        return LEND(LendPlatform).exchangeRateCurrent();
+    }
+    function exchangeRateStored() external view returns (uint) {
+        return LEND(LendPlatform).exchangeRateStored();
+    }
+    function getCash() external view returns (uint) {
+        return LEND(LendPlatform).getCash();
+    }
+    function balanceOfUnderlying(address _addr) external view returns (uint256) {
+        return LEND(LendPlatform).balanceOfUnderlying(_addr);
+    }
 }
 
         

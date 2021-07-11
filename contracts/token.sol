@@ -2,11 +2,22 @@ pragma solidity ^0.5.0;
 
 import "./vault.sol";
 import "./vaultHelpers.sol";
+import "./farms/spirit.sol";
+import "./lenders/cream.sol";
 
 
-contract rvUSDC is ERC20, ERC20Detailed, ReentrancyGuard, Ownable, vault {
+contract rbUSDC is ERC20, ERC20Detailed, ReentrancyGuard, Ownable, Vault {
     using SafeERC20 for IERC20;
     using SafeMath for uint256;
+
+    Cream lender = new Cream();
+    Spirit farm = new Spirit();
+
+    // TODO Remove
+    address public constant lendPlatform = 0x328A7b4d538A2b3942653a9983fdA3C12c571141; // platform for addding base token as collateral
+    address public constant RouterAddress = 0x16327E3FbDaCA3bcF7E38F5Af2599D2DDc33aE52;
+    address public constant borrow_platform = 0xd528697008aC67A21818751A5e3c58C8daE54696;
+    address public constant FarmAddress = 0x9083EA3756BDE6Ee6f27a6e996806FBD37F6F093;
     
     address public strategist = 0xD074CDae76496d81Fab83023fee4d8631898bBAf;
     address public keeper = 0x7642604866B546b8ab759FceFb0C5c24b296B925;
@@ -21,6 +32,9 @@ contract rvUSDC is ERC20, ERC20Detailed, ReentrancyGuard, Ownable, vault {
     uint256 public harvestFee = 50000;
     uint256 public withdrawalFee = 5000;
     uint256 public reserveAllocation = 50000;
+
+    address WFTM = 0x21be370D5312f44cB42ce377BC9b8a0cEF1A4C83;
+    address USDC = 0x04068DA6C83AFCFA0e13ba15A6696662335D5B75;
     
     /// protocal limits & upper, target and lower thresholds for ratio of debt to collateral 
     uint256 collatLimit = 750000;
@@ -33,8 +47,8 @@ contract rvUSDC is ERC20, ERC20Detailed, ReentrancyGuard, Ownable, vault {
     event UpdatedKeeper(address newKeeper);
     
     constructor (ERC20Detailed obj) public 
-        vault(address(0x04068DA6C83AFCFA0e13ba15A6696662335D5B75)) 
-        ERC20Detailed("vault USDC", "rvUSDC", 18) 
+        Vault(farm, lender, USDC, WFTM) 
+        ERC20Detailed("vault USDC", "rvUSDC", 18)
     {
      
     }
@@ -312,10 +326,7 @@ contract rvUSDC is ERC20, ERC20Detailed, ReentrancyGuard, Ownable, vault {
             /// action = remove some LP -> repay debt + add base token to collateral 
             uint256 baseValueAdj = (shortPos.mul(2)).sub(lpPos);
             _withdrawLpRebalance(baseValueAdj);
-    
-      }
-    
-      
+      }      
     }
     
     /// called by keeper to harvest rewards and either repay debt or add to reserves 
@@ -323,8 +334,7 @@ contract rvUSDC is ERC20, ERC20Detailed, ReentrancyGuard, Ownable, vault {
         
         /// harvest from farm & based on amt borrowed vs LP value either -> repay some debt or add to collateral
         _onlyKeepers();
-        //FARM(farm).deposit(pid, 0); /// for spirit swap call deposit with amt = 0
-        Farm.withdraw(pid, 0); /// for spooky swap call withdraw with amt = 0
+        farm.withdraw(farm.pid(), 0); /// for spooky swap call withdraw with amt = 0
         
         if (calcDebtRatio() < decimalAdj){
             /// more 
@@ -346,7 +356,7 @@ contract rvUSDC is ERC20, ERC20Detailed, ReentrancyGuard, Ownable, vault {
     function getPricePerFullShare() public view returns(uint256) {
         uint256 bal = calcPoolValueInToken();
         uint256 supply = totalSupply();
-        return bal.div(supply);
+        return bal.mul(decimalAdj).div(supply);
     }
 
     
