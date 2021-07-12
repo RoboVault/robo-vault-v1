@@ -34,9 +34,10 @@ contract Token is ReentrancyGuard, Ownable, Vault {
     event UpdatedStrategist(address newStrategist);
     event UpdatedKeeper(address newKeeper);
     
-    constructor (IFarm _farm, ILend _lend, address _base, address _short) public 
-        Vault(_farm, _lend, _base, _short) 
-    {}
+    constructor (address _base, address _short) public 
+        Vault(_base, _short) 
+    {
+    }
 
     // modifiers 
     function _onlyAuthorized() internal view {
@@ -46,8 +47,8 @@ contract Token is ReentrancyGuard, Ownable, Vault {
     function _onlyKeepers() internal view {
         require(
             msg.sender == keeper ||
-                msg.sender == strategist || 
-                msg.sender == owner()
+            msg.sender == strategist || 
+            msg.sender == owner()
         );
     }
     
@@ -55,27 +56,29 @@ contract Token is ReentrancyGuard, Ownable, Vault {
     function _liquidityCheck(uint256 _amount) internal view {
         uint256 lendBal = getBaseInLending();
         require(lendBal > _amount, "CREAM Currently has insufficent liquidity of base token to complete withdrawal.");
+        
+        
     }
     
     function approveContracts() external {
         _onlyAuthorized();
-        base.safeApprove(address(lend.LendPlatform), uint256(-1));
-        shortToken.safeApprove(address(lend.BorrowPlatform()), uint256(-1));
-        base.safeApprove(farm.RouterAddress(), uint256(-1));
-        shortToken.safeApprove(farm.RouterAddress(), uint256(-1));
-        harvestToken.safeApprove(farm.RouterAddress(), uint256(-1));
-        lp.safeApprove(farm.RouterAddress(), uint256(-1));
-        lp.approve(address(farm.FarmAddress()), uint256(-1));
+        base.safeApprove(lendPlatform(), uint256(-1));
+        shortToken.safeApprove(borrowPlatform(), uint256(-1));
+        base.safeApprove(routerAddress(), uint256(-1));
+        shortToken.safeApprove(routerAddress(), uint256(-1));
+        harvestToken.safeApprove(routerAddress(), uint256(-1));
+        lp.safeApprove(routerAddress(), uint256(-1));
+        lp.approve(farmAddress(), uint256(-1));
     }
         
     function resetApprovals( ) external {
         _onlyAuthorized();
-        base.safeApprove(address(lend.LendPlatform), 0);
-        shortToken.safeApprove(address(lend.BorrowPlatform()), 0);
-        base.safeApprove(farm.RouterAddress(), 0);
-        shortToken.safeApprove(farm.RouterAddress(), 0);
-        harvestToken.safeApprove(farm.RouterAddress(), 0);
-        lp.safeApprove(farm.RouterAddress(), 0);
+        base.safeApprove(lendPlatform(), 0);
+        shortToken.safeApprove(borrowPlatform(), 0);
+        base.safeApprove(routerAddress(), 0);
+        shortToken.safeApprove(routerAddress(), 0);
+        harvestToken.safeApprove(routerAddress(), 0);
+        lp.safeApprove(routerAddress(), 0);
     }
     
     /// update strategist -> this is the address that receives fees + can complete rebalancing and update strategy thresholds
@@ -317,7 +320,7 @@ contract Token is ReentrancyGuard, Ownable, Vault {
         
         /// harvest from farm & based on amt borrowed vs LP value either -> repay some debt or add to collateral
         _onlyKeepers();
-        farm.withdraw(farm.pid(), 0); /// for spooky swap call withdraw with amt = 0
+        farmWithdraw(farmPid(), 0); /// for spooky swap call withdraw with amt = 0
         
         if (calcDebtRatio() < decimalAdj){
             /// more 
@@ -341,7 +344,6 @@ contract Token is ReentrancyGuard, Ownable, Vault {
         uint256 supply = totalSupply();
         return bal.mul(decimalAdj).div(supply);
     }
-
     
 
     // remove all of Vaults LP tokens and repay debt meaning vault only holds base token (in lending + reserves)
@@ -351,7 +353,7 @@ contract Token is ReentrancyGuard, Ownable, Vault {
         _repayDebt(); 
         
         if (getDebtShort() > 0){
-            uint256 debtOutstanding = lend.borrowBalanceStored(address(this));
+            uint256 debtOutstanding = borrowBalanceStored(address(this));
             _swapBaseShortExact(debtOutstanding);
             _repayDebt();
 

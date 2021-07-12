@@ -18,66 +18,63 @@ interface LEND {
     function exchangeRateCurrent() external view returns (uint256);
     function exchangeRateStored() external view returns (uint);
     function getCash() external view returns (uint);
-    function balanceOfUnderlying(address addr) external view returns (uint256);
+    function balanceOfUnderlying(address) external view returns (uint256);
 }
 
-interface Icomptroller {
-  function enterMarkets(address[] calldata cTokens) external returns (uint[] memory);
-}
 
 contract Cream is ILend {
     /// Lend and Borrow wrapper for cream 
     using SafeMath for uint256;
-    address public constant BorrowPlatform = 0xd528697008aC67A21818751A5e3c58C8daE54696;
-    address public constant LendPlatform = 0x328A7b4d538A2b3942653a9983fdA3C12c571141; 
-    address public constant ComptrollerAddress = 0x4250A6D3BD57455d7C6821eECb6206F507576cD2; /// Cream Comptroller 
 
-    function enterMarkets() external {
-        Icomptroller comptroller = Icomptroller(ComptrollerAddress);
-        address[] memory cTokens = new address[](1);
-        cTokens[0] = LendPlatform;
-        comptroller.enterMarkets(cTokens);
+    function borrowPlatform() public view returns (address) {
+        return 0xd528697008aC67A21818751A5e3c58C8daE54696;
+    }
+    function lendPlatform() public view returns (address) {
+        return 0x328A7b4d538A2b3942653a9983fdA3C12c571141;
+    }
+    function comptrollerAddress() public view returns (address) {
+        return 0x4250A6D3BD57455d7C6821eECb6206F507576cD2;
     }
     
     /*
     * Borrow Methods
     */
-    function borrow(uint256 _borrowAmount) external returns (uint256) {
-        return BORROW(BorrowPlatform).borrow(_borrowAmount);
+    function borrow(uint256 _borrowAmount) internal returns (uint256) {
+        return BORROW(borrowPlatform()).borrow(_borrowAmount);
     } 
-    function borrowBalanceStored(address _account) external view returns (uint) {
-        return BORROW(BorrowPlatform).borrowBalanceStored(_account);
+    function borrowBalanceStored(address _account) internal view returns (uint) {
+        return BORROW(borrowPlatform()).borrowBalanceStored(_account);
     }
-    function repayBorrow(uint _repayAmount) external {
-        BORROW(BorrowPlatform).repayBorrow(_repayAmount);
+    function borrowRepay(uint _repayAmount) internal {
+        BORROW(borrowPlatform()).repayBorrow(_repayAmount);
     }
 
     /*
     * Lend Methods
     */
-    function mint(uint256 _mintAmount) external {
-        LEND(LendPlatform).mint(_mintAmount);
+    function lendMint(uint256 _mintAmount) internal {
+        LEND(lendPlatform()).mint(_mintAmount);
     }
-    function redeem(uint _redeemTokens) external {
-        LEND(LendPlatform).redeem(_redeemTokens);
+    function lendRedeem(uint _redeemTokens) internal {
+        LEND(lendPlatform()).redeem(_redeemTokens);
     }
-    function redeemUnderlying(uint _redeemAmount) external {
-        LEND(LendPlatform).redeemUnderlying(_redeemAmount);
+    function lendRedeemUnderlying(uint _redeemAmount) internal {
+        LEND(lendPlatform()).redeemUnderlying(_redeemAmount);
     }
-    function balanceOf(address _owner) external view returns (uint256) {
-        return LEND(LendPlatform).balanceOf(_owner);
+    function lendBalanceOf(address _owner) internal view returns (uint256) {
+        return LEND(lendPlatform()).balanceOf(_owner);
     }
-    function exchangeRateCurrent() external view returns (uint256) {
-        return LEND(LendPlatform).exchangeRateCurrent();
+    function lendExchangeRateCurrent() internal view returns (uint256) {
+        return LEND(lendPlatform()).exchangeRateCurrent();
     }
-    function exchangeRateStored() external view returns (uint) {
-        return LEND(LendPlatform).exchangeRateStored();
+    function lendExchangeRateStored() internal view returns (uint) {
+        return LEND(lendPlatform()).exchangeRateStored();
     }
-    function getCash() external view returns (uint) {
-        return LEND(LendPlatform).getCash();
+    function lendGetCash() internal view returns (uint) {
+        return LEND(lendPlatform()).getCash();
     }
-    function balanceOfUnderlying(address _addr) external view returns (uint256) {
-        return LEND(LendPlatform).balanceOfUnderlying(_addr);
+    function lendBalanceOfUnderlying(address _addr) internal view returns (uint256) {
+        return LEND(lendPlatform()).balanceOfUnderlying(_addr);
     }
 }
 
