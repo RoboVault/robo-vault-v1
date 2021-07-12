@@ -3,12 +3,13 @@ pragma solidity ^0.6.12;
 import "../vaultHelpers.sol";
 
 abstract contract IFarm {
+    using SafeMath for uint256;
     function farmAddress() public view virtual returns (address); 
     function routerAddress() public view virtual returns (address); 
     function farmToken() public view virtual returns (address); 
     function farmTokenLp() public view virtual returns (address); 
-    function farmLP() public view virtual returns (address);
-    function farmPid() public view virtual returns (uint256);
+    function farmLP() public view virtual returns (address); /// LP contract for base & short token
+    function farmPid() public view virtual returns (uint256); /// iquidity Pool ID
 
     /*
      * Farm specific methods

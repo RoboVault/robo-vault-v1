@@ -5,7 +5,7 @@ import "./farms/ifarm.sol";
 import "./lenders/ilend.sol";
 
 interface Icomptroller {
-    function enterMarkets(address[] calldata cTokens) external returns (uint[] memory);
+  function enterMarkets(address[] calldata cTokens) external returns (uint[] memory);
 }
 
 abstract contract Vault is ERC20, ERC20Detailed, ILend, IFarm {
