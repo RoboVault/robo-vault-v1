@@ -261,7 +261,7 @@ abstract contract Token is ReentrancyGuard, Ownable, Vault {
 
     function withdrawSome(uint256 _amount) public {
       _onlyAuthorized();
-      _withdrawSome();
+      _withdrawSome(_amount);
     }
 
     

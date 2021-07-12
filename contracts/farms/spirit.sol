@@ -26,16 +26,16 @@ abstract contract Spirit is IFarm {
      * Spirit Addresses
      */
     function farmAddress() public view override returns (address) {
-        return 0x2b2929E785374c651a81A63878Ab22742656DcDd;
+        return 0x9083EA3756BDE6Ee6f27a6e996806FBD37F6F093;
     }
     function routerAddress() public view override returns (address) {
-        return 0xF491e7B69E4244ad4002BC14e878a34207E38c29;
+        return 0x16327E3FbDaCA3bcF7E38F5Af2599D2DDc33aE52;
     }
     function farmToken() public view override returns (address) {
-        return 0x841FAD6EAe12c286d1Fd18d1d525DFfA75C7EFFE;
+        return 0x5Cc61A78F164885776AA610fb0FE1257df78E59B;
     }
     function farmTokenLp() public view override returns (address) {
-        return 0xEc7178F4C41f346b2721907F5cF7628E388A7a58;
+        return 0x30748322B6E34545DBe0788C421886AEB5297789;
     }
 
     /*
