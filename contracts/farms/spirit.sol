@@ -21,6 +21,23 @@ interface EXCHANGE {
 }
 
 abstract contract Spirit is IFarm {
+    
+    /**
+     * Spirit Addresses
+     */
+    function farmAddress() public view override returns (address) {
+        return 0x2b2929E785374c651a81A63878Ab22742656DcDd;
+    }
+    function routerAddress() public view override returns (address) {
+        return 0xF491e7B69E4244ad4002BC14e878a34207E38c29;
+    }
+    function farmToken() public view override returns (address) {
+        return 0x841FAD6EAe12c286d1Fd18d1d525DFfA75C7EFFE;
+    }
+    function farmTokenLp() public view override returns (address) {
+        return 0xEc7178F4C41f346b2721907F5cF7628E388A7a58;
+    }
+
     /*
      * Farm specific methods
      */

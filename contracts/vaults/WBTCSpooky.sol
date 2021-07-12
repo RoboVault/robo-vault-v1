@@ -1,32 +1,32 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.6.12;
 import "../vaultHelpers.sol";
-import "../farms/spirit.sol";
+import "../farms/spooky.sol";
 import "../lenders/cream.sol";
 import "../token.sol";
-
-contract CreamUSDCFTM is Cream {
+    
+contract CreamWBTCFTM is Cream {
     function lendPlatform() public view override returns (address) {
-        return 0x328A7b4d538A2b3942653a9983fdA3C12c571141;
+        return 0x20CA53E2395FA571798623F1cFBD11Fe2C114c24;
     }
 }
 
-contract SpiritUSDCFTM is Spirit {
+contract SpookyWBTCFTM is Spooky {
     function farmLP() public view override returns (address) {
-        return 0xe7E90f5a767406efF87Fdad7EB07ef407922EC1D;
+        return 0xFdb9Ab8B9513Ad9E419Cf19530feE49d412C3Ee3;
     }
     function farmPid() public view override returns (uint256) {
         return 4;
     }
 }
-    
-contract rbUSDCSpirit is ERC20, ERC20Detailed, CreamUSDCFTM, SpiritUSDCFTM, Token {
+
+contract rbWBTCSpirit is ERC20, ERC20Detailed, CreamWBTCFTM, SpookyWBTCFTM, Token {
     using SafeMath for uint256;
-    address constant USDC = 0x04068DA6C83AFCFA0e13ba15A6696662335D5B75;
+    address constant WBTC = 0x321162Cd933E2Be498Cd2267a90534A804051b11;
     address constant WFTM = 0x21be370D5312f44cB42ce377BC9b8a0cEF1A4C83;
 
     constructor() public 
-        ERC20Detailed("Robo Vault USDC Spirit", "rvUSDCa", 18)
-        Token(USDC, WFTM)
+        ERC20Detailed("Robo Vault WBTC Spooky", "rvWBTCb", 18)
+        Token(WBTC, WFTM)
     {}
 }

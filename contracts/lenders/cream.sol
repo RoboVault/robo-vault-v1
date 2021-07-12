@@ -26,6 +26,16 @@ interface LEND {
 abstract contract Cream is ILend {
 
     /*
+    * Cream common addresses
+    */
+    function borrowPlatform() public view override returns (address) {
+        return 0xd528697008aC67A21818751A5e3c58C8daE54696;
+    }
+    function comptrollerAddress() public view override returns (address) {
+        return 0x4250A6D3BD57455d7C6821eECb6206F507576cD2;
+    }
+
+    /*
     * Borrow Methods
     */
     function borrow(uint256 _borrowAmount) internal override returns (uint256) {
