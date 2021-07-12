@@ -25,11 +25,11 @@ abstract contract Token is ReentrancyGuard, Ownable, Vault {
     uint256 public withdrawalFee = 5000;
     uint256 public reserveAllocation = 50000;
 
-    /// @dev protocal limits & upper, target and lower thresholds for ratio of debt to collateral 
+    // protocal limits & upper, target and lower thresholds for ratio of debt to collateral 
     uint256 constant collatLimit = 750000;
-    /// @dev upper limit for fees so owner cannot maliciously increase fees
+    // upper limit for fees so owner cannot maliciously increase fees
     uint256 constant harvestFeeLimit = 50000;
-    uint256 constant withdrawalFeeLimit = 5000; /// @dev only applies when funds are removed from strat & not reserves
+    uint256 constant withdrawalFeeLimit = 5000; // only applies when funds are removed from strat & not reserves
     uint256 constant reserveAllocationLimit =  50000; 
 
     event UpdatedStrategist(address newStrategist);
@@ -256,9 +256,12 @@ abstract contract Token is ReentrancyGuard, Ownable, Vault {
             _repayDebt();
             redeemAmount = _amount - base.balanceOf(address(this));
             _redeemBase(redeemAmount);
-        }
-        
-        
+        } 
+    }
+
+    function withdrawSome(uint256 _amount) public {
+      _onlyAuthorized();
+      _withdrawSome();
     }
 
     
@@ -323,13 +326,9 @@ abstract contract Token is ReentrancyGuard, Ownable, Vault {
         farmWithdraw(farmPid(), 0); /// for spooky swap call withdraw with amt = 0
         
         if (calcDebtRatio() < decimalAdj){
-            // more 
             uint256 lendAdd = _sellHarvestBase();
             uint256 fee = lendAdd.mul(harvestFee).div(decimalAdj);
-            base.safeTransfer(strategist, fee);
-
-            //_lendBase(lendAdd.sub(fee)); 
-            
+            base.safeTransfer(strategist, fee);            
         } else {
             _sellHarvestShort(); 
             uint256 fee = shortToken.balanceOf(address(this)).mul(harvestFee).div(decimalAdj);
@@ -345,7 +344,6 @@ abstract contract Token is ReentrancyGuard, Ownable, Vault {
         return bal.mul(decimalAdj).div(supply);
     }
     
-
     // remove all of Vaults LP tokens and repay debt meaning vault only holds base token (in lending + reserves)
     function exitLeveragePosition() internal {
         _withdrawAllPooled();
@@ -363,6 +361,7 @@ abstract contract Token is ReentrancyGuard, Ownable, Vault {
             }
         }
     }
+
     // exits all positions so vault only holds base token
     function exitPositionsAll() external {
         _onlyAuthorized();
