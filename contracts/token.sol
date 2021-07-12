@@ -1,4 +1,5 @@
-pragma solidity ^0.5.0;
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.6.12;
 
 import "./vault.sol";
 import "./vaultHelpers.sol";
@@ -6,7 +7,7 @@ import "./farms/ifarm.sol";
 import "./lenders/ilend.sol";
 
 
-contract Token is ReentrancyGuard, Ownable, Vault {
+abstract contract Token is ReentrancyGuard, Ownable, Vault {
     using SafeERC20 for IERC20;
     using SafeMath for uint256;
     
@@ -24,11 +25,11 @@ contract Token is ReentrancyGuard, Ownable, Vault {
     uint256 public withdrawalFee = 5000;
     uint256 public reserveAllocation = 50000;
 
-    /// protocal limits & upper, target and lower thresholds for ratio of debt to collateral 
+    /// @dev protocal limits & upper, target and lower thresholds for ratio of debt to collateral 
     uint256 constant collatLimit = 750000;
-    /// upper limit for fees so owner cannot maliciously increase fees
+    /// @dev upper limit for fees so owner cannot maliciously increase fees
     uint256 constant harvestFeeLimit = 50000;
-    uint256 constant withdrawalFeeLimit = 5000; /// only applies when funds are removed from strat & not reserves
+    uint256 constant withdrawalFeeLimit = 5000; /// @dev only applies when funds are removed from strat & not reserves
     uint256 constant reserveAllocationLimit =  50000; 
 
     event UpdatedStrategist(address newStrategist);
@@ -147,7 +148,7 @@ contract Token is ReentrancyGuard, Ownable, Vault {
     /// function to deploy funds when reserves exceed some threshold
     function deployStrat() external {
         _onlyKeepers();
-        ///require(msg.sender == owner, 'only admin');
+        // require(msg.sender == owner, 'only admin');
         uint256 bal = base.balanceOf(address(this)); 
         uint256 totalBal = calcPoolValueInToken();
         uint256 reserves = totalBal.mul(reserveAllocation).div(decimalAdj);
@@ -156,10 +157,9 @@ contract Token is ReentrancyGuard, Ownable, Vault {
         }
         
     }
-    /// deploy assets according to vault strategy    
+    // deploy assets according to vault strategy    
     function _deployCapital(uint256 _amount) internal {
-        ///require(msg.sender == owner, 'only admin');
-        ///uint256 bal = base.balanceOf(address(this)); 
+        // require(msg.sender == owner, 'only admin');
         uint256 lendDeposit = stratLendAllocation.mul(_amount).div(decimalAdj);
         _lendBase(lendDeposit); 
         uint256 borrowAmtBase = stratDebtAllocation.mul(_amount).div(decimalAdj); 
@@ -202,7 +202,7 @@ contract Token is ReentrancyGuard, Ownable, Vault {
       // Check balance
       uint256 b = IERC20(base).balanceOf(address(this));
       if (b < r) {
-        /// take withdrawal fee for removing from strat 
+        // take withdrawal fee for removing from strat 
         uint256 fee = _calcWithdrawalFee(r);
         r = r.sub(fee);
         _withdrawSome(r);
@@ -242,7 +242,7 @@ contract Token is ReentrancyGuard, Ownable, Vault {
 
         uint256 redeemAmount = _amount - base.balanceOf(address(this)); 
         
-        /// need to add a check for collateral ratio after redeeming 
+        // need to add a check for collateral ratio after redeeming 
         uint256 postRedeemCollateral = (balanceDebt()).mul(decimalAdj).div(balanceLend().sub(redeemAmount));
         if (postRedeemCollateral < collatLimit){
             _redeemBase(redeemAmount);
@@ -269,7 +269,7 @@ contract Token is ReentrancyGuard, Ownable, Vault {
         uint256 shortPos = balanceDebt();
         uint256 lendPos = balanceLend();
         
-        /// ratio of amount borrowed to collateral 
+        // ratio of amount borrowed to collateral 
         uint256 collatRat = calcCollateral(); 
         
         if (collatRat > collatUpper) {
@@ -296,8 +296,8 @@ contract Token is ReentrancyGuard, Ownable, Vault {
       uint256 lpPos = balanceLp();
       
       if (calcDebtRatio() < debtLower){
-            /// amount of short token in LP is greater than amount borrowed -> 
-            /// action = borrow more short token swap half for base token and add to LP + farm
+            // amount of short token in LP is greater than amount borrowed -> 
+            // action = borrow more short token swap half for base token and add to LP + farm
             uint256 borrowAmtBase = lpPos.sub(shortPos.mul(2));
             uint256 borrowAmt = _borrowBaseEq(borrowAmtBase);
             _swapShortBase(borrowAmt.div(2));
@@ -308,8 +308,8 @@ contract Token is ReentrancyGuard, Ownable, Vault {
       }
       
       if (calcDebtRatio() > debtUpper){
-            /// amount of short token in LP is less than amount borrowed -> 
-            /// action = remove some LP -> repay debt + add base token to collateral 
+            // amount of short token in LP is less than amount borrowed -> 
+            // action = remove some LP -> repay debt + add base token to collateral 
             uint256 baseValueAdj = (shortPos.mul(2)).sub(lpPos);
             _withdrawLpRebalance(baseValueAdj);
       }      
@@ -323,7 +323,7 @@ contract Token is ReentrancyGuard, Ownable, Vault {
         farmWithdraw(farmPid(), 0); /// for spooky swap call withdraw with amt = 0
         
         if (calcDebtRatio() < decimalAdj){
-            /// more 
+            // more 
             uint256 lendAdd = _sellHarvestBase();
             uint256 fee = lendAdd.mul(harvestFee).div(decimalAdj);
             base.safeTransfer(strategist, fee);

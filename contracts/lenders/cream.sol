@@ -1,4 +1,5 @@
-pragma solidity ^0.5.0;
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.6.12;
 import "../vaultHelpers.sol";
 import "./ilend.sol";
 
@@ -22,58 +23,58 @@ interface LEND {
 }
 
 
-contract Cream is ILend {
+abstract contract Cream is ILend {
     /// Lend and Borrow wrapper for cream 
     using SafeMath for uint256;
 
-    function borrowPlatform() public view returns (address) {
+    function borrowPlatform() public view override returns (address) {
         return 0xd528697008aC67A21818751A5e3c58C8daE54696;
     }
-    function lendPlatform() public view returns (address) {
+    function lendPlatform() public view override returns (address) {
         return 0x328A7b4d538A2b3942653a9983fdA3C12c571141;
     }
-    function comptrollerAddress() public view returns (address) {
+    function comptrollerAddress() public view override returns (address) {
         return 0x4250A6D3BD57455d7C6821eECb6206F507576cD2;
     }
     
     /*
     * Borrow Methods
     */
-    function borrow(uint256 _borrowAmount) internal returns (uint256) {
+    function borrow(uint256 _borrowAmount) internal override returns (uint256) {
         return BORROW(borrowPlatform()).borrow(_borrowAmount);
     } 
-    function borrowBalanceStored(address _account) internal view returns (uint) {
+    function borrowBalanceStored(address _account) internal view override returns (uint) {
         return BORROW(borrowPlatform()).borrowBalanceStored(_account);
     }
-    function borrowRepay(uint _repayAmount) internal {
+    function borrowRepay(uint _repayAmount) internal override {
         BORROW(borrowPlatform()).repayBorrow(_repayAmount);
     }
 
     /*
     * Lend Methods
     */
-    function lendMint(uint256 _mintAmount) internal {
+    function lendMint(uint256 _mintAmount) internal override {
         LEND(lendPlatform()).mint(_mintAmount);
     }
-    function lendRedeem(uint _redeemTokens) internal {
+    function lendRedeem(uint _redeemTokens) internal override {
         LEND(lendPlatform()).redeem(_redeemTokens);
     }
-    function lendRedeemUnderlying(uint _redeemAmount) internal {
+    function lendRedeemUnderlying(uint _redeemAmount) internal override {
         LEND(lendPlatform()).redeemUnderlying(_redeemAmount);
     }
-    function lendBalanceOf(address _owner) internal view returns (uint256) {
+    function lendBalanceOf(address _owner) internal view override returns (uint256) {
         return LEND(lendPlatform()).balanceOf(_owner);
     }
-    function lendExchangeRateCurrent() internal view returns (uint256) {
+    function lendExchangeRateCurrent() internal view override returns (uint256) {
         return LEND(lendPlatform()).exchangeRateCurrent();
     }
-    function lendExchangeRateStored() internal view returns (uint) {
+    function lendExchangeRateStored() internal view override returns (uint) {
         return LEND(lendPlatform()).exchangeRateStored();
     }
-    function lendGetCash() internal view returns (uint) {
+    function lendGetCash() internal view override returns (uint) {
         return LEND(lendPlatform()).getCash();
     }
-    function lendBalanceOfUnderlying(address _addr) internal view returns (uint256) {
+    function lendBalanceOfUnderlying(address _addr) internal view override returns (uint256) {
         return LEND(lendPlatform()).balanceOfUnderlying(_addr);
     }
 }

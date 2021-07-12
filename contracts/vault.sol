@@ -1,17 +1,18 @@
-pragma solidity ^0.5.0;
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.6.12;
 import "./vaultHelpers.sol";
 import "./farms/ifarm.sol";
 import "./lenders/ilend.sol";
 
 interface Icomptroller {
-  function enterMarkets(address[] calldata cTokens) external returns (uint[] memory);
+    function enterMarkets(address[] calldata cTokens) external returns (uint[] memory);
 }
 
-contract Vault is ERC20, ERC20Detailed, ILend, IFarm {
+abstract contract Vault is ERC20, ERC20Detailed, ILend, IFarm {
     using SafeERC20 for IERC20;
     using SafeMath for uint256;
 
-    uint256 constant decimalAdj = 1000000; /// variable used when calculating (equivant to 1 / 100% for float like operations )
+    uint256 constant decimalAdj = 1000000; // variable used when calculating (equivant to 1 / 100% for float like operations )
     uint256 constant slippageAdj = 990000;
     uint256 constant slippageAdjHigh = 1010000;
 
@@ -123,7 +124,6 @@ contract Vault is ERC20, ERC20Detailed, ILend, IFarm {
     
     // borrow tokens woth _amount of base tokens 
     function _borrowBaseEq(uint256 _amount) public returns(uint256) {
-        ///uint256 bal = base.balanceOf(address(this));
         uint256 shortLP = _getShortInLp();
         uint256 baseLP = getBaseInLp();
         uint256 borrowamount = _amount.mul(shortLP).div(baseLP);
@@ -155,7 +155,7 @@ contract Vault is ERC20, ERC20Detailed, ILend, IFarm {
         
     }
     
-    function getDebtShort() public returns(uint256) {
+    function getDebtShort() public view returns(uint256) {
         uint256 _debt =  borrowBalanceStored(address(this)); 
         return(_debt);
     }

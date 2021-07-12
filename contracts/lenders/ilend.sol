@@ -1,31 +1,32 @@
-pragma solidity ^0.5.0;
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.6.12;
 import "../vaultHelpers.sol";
 
-contract ILend {
+abstract contract ILend {
     /// Lend and Borrow wrapper for cream 
     using SafeMath for uint256;
-    function borrowPlatform() public view returns (address);
-    function lendPlatform() public view returns (address);
-    function comptrollerAddress() public view returns (address);
+    function borrowPlatform() public view virtual returns (address);
+    function lendPlatform() public view virtual returns (address);
+    function comptrollerAddress() public view virtual returns (address);
     
     /*
     * Borrow Methods
     */
-    function borrow(uint256 _borrowAmount) internal returns (uint256);
-    function borrowBalanceStored(address _account) internal view returns (uint);
-    function borrowRepay(uint _repayAmount) internal;
+    function borrow(uint256 _borrowAmount) internal virtual returns (uint256);
+    function borrowBalanceStored(address _account) internal view virtual returns (uint);
+    function borrowRepay(uint _repayAmount) internal virtual;
 
     /*
     * Lend Methods
     */
-    function lendMint(uint256 _mintAmount) internal;
-    function lendRedeem(uint _redeemTokens) internal;
-    function lendRedeemUnderlying(uint _redeemAmount) internal;
-    function lendBalanceOf(address _owner) internal view returns (uint256);
-    function lendExchangeRateCurrent() internal view returns (uint256);
-    function lendExchangeRateStored() internal view returns (uint);
-    function lendGetCash() internal view returns (uint);
-    function lendBalanceOfUnderlying(address _addr) internal view returns (uint256);
+    function lendMint(uint256 _mintAmount) internal virtual;
+    function lendRedeem(uint _redeemTokens) internal virtual;
+    function lendRedeemUnderlying(uint _redeemAmount) internal virtual;
+    function lendBalanceOf(address _owner) internal view virtual returns (uint256);
+    function lendExchangeRateCurrent() internal view virtual returns (uint256);
+    function lendExchangeRateStored() internal view virtual returns (uint);
+    function lendGetCash() internal view virtual returns (uint);
+    function lendBalanceOfUnderlying(address _addr) internal view virtual returns (uint256);
 }
 
         
