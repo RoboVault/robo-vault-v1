@@ -24,6 +24,8 @@ abstract contract Token is ReentrancyGuard, Ownable, Vault {
     uint256 public harvestFee = 50000;
     uint256 public withdrawalFee = 5000;
     uint256 public reserveAllocation = 50000;
+    uint256 public harvestThreshold = 1000000;
+
 
     // protocal limits & upper, target and lower thresholds for ratio of debt to collateral 
     uint256 constant collatLimit = 750000;
@@ -90,6 +92,10 @@ abstract contract Token is ReentrancyGuard, Ownable, Vault {
         require(_keeper != address(0));
         keeper = _keeper;
         emit UpdatedKeeper(_keeper);
+    }
+
+    function setHarvestThreshold(uint256 _harvestThreshold) onlyAuthorized {
+        harvestThreshold =  _harvestThreshold;
     }
     
     function setDebtThresholds(uint256 _lower, uint256 _upper) external onlyAuthorized {
@@ -310,7 +316,7 @@ abstract contract Token is ReentrancyGuard, Ownable, Vault {
         /// harvest from farm & based on amt borrowed vs LP value either -> repay some debt or add to collateral
         farmWithdraw(farmPid(), 0); /// for spooky swap call withdraw with amt = 0
         
-        if (calcDebtRatio() < decimalAdj){
+        if (calcDebtRatio() < harvestThreshold){
             uint256 lendAdd = _sellHarvestBase();
             uint256 fee = lendAdd.mul(harvestFee).div(decimalAdj);
             base.safeTransfer(strategist, fee);            
