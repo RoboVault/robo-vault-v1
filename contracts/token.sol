@@ -41,16 +41,14 @@ abstract contract Token is ReentrancyGuard, Ownable, Vault {
     }
 
     // modifiers 
-    function _onlyAuthorized() internal view {
+    modifier onlyAuthorized() {
         require(msg.sender == strategist || msg.sender == owner());
+        _;
     }
 
-    function _onlyKeepers() internal view {
-        require(
-            msg.sender == keeper ||
-            msg.sender == strategist || 
-            msg.sender == owner()
-        );
+    modifier onlyKeepers() {
+        require(msg.sender == keeper || msg.sender == strategist || msg.sender == owner());
+        _;
     }
     
     /// before withdrawing from strat check there is enough liquidity in lending protocal 
@@ -61,8 +59,7 @@ abstract contract Token is ReentrancyGuard, Ownable, Vault {
         
     }
     
-    function approveContracts() external {
-        _onlyAuthorized();
+    function approveContracts() external onlyAuthorized {
         base.safeApprove(lendPlatform(), uint256(-1));
         shortToken.safeApprove(borrowPlatform(), uint256(-1));
         base.safeApprove(routerAddress(), uint256(-1));
@@ -72,8 +69,7 @@ abstract contract Token is ReentrancyGuard, Ownable, Vault {
         lp.approve(farmAddress(), uint256(-1));
     }
         
-    function resetApprovals( ) external {
-        _onlyAuthorized();
+    function resetApprovals( ) external onlyAuthorized {
         base.safeApprove(lendPlatform(), 0);
         shortToken.safeApprove(borrowPlatform(), 0);
         base.safeApprove(routerAddress(), 0);
@@ -84,30 +80,26 @@ abstract contract Token is ReentrancyGuard, Ownable, Vault {
     
     /// update strategist -> this is the address that receives fees + can complete rebalancing and update strategy thresholds
     /// strategist can also exit leveraged position i.e. withdraw all pooled LP and repay outstanding debt 
-    function setStrategist(address _strategist) external {
-        _onlyAuthorized();
+    function setStrategist(address _strategist) external onlyAuthorized {
         require(_strategist != address(0));
         strategist = _strategist;
         emit UpdatedStrategist(_strategist);
     }
     /// keeper has ability to copmlete rebalancing functions & also deploy capital to strategy once reserves exceed some threshold
-    function setKeeper(address _keeper) external {
-        _onlyAuthorized();
+    function setKeeper(address _keeper) external onlyAuthorized {
         require(_keeper != address(0));
         keeper = _keeper;
         emit UpdatedKeeper(_keeper);
     }
     
-    function setDebtThresholds(uint256 _lower, uint256 _upper) external {
-        _onlyAuthorized();
+    function setDebtThresholds(uint256 _lower, uint256 _upper) external onlyAuthorized {
         require(_lower < decimalAdj);
         require(_upper > decimalAdj);
         debtUpper = _upper;
         debtLower = _lower;
     }
     
-    function setCollateralThresholds(uint256 _lower, uint256 _upper, uint256 _target) external {
-        _onlyAuthorized();
+    function setCollateralThresholds(uint256 _lower, uint256 _upper, uint256 _target) external onlyAuthorized {
         require(collatLimit > _upper);
         require(_upper > _target);
         require(_target > _lower);
@@ -116,9 +108,8 @@ abstract contract Token is ReentrancyGuard, Ownable, Vault {
         collatLower = _lower;
     }
     
-    function setFundingAllocations(uint256 _reserveAllocation, uint256 _lendAllocation) external {
-        _onlyAuthorized();
-        
+    function setFundingAllocations(uint256 _reserveAllocation, uint256 _lendAllocation) external onlyAuthorized {
+
         uint256 _debtAllocation = decimalAdj.sub(_lendAllocation); 
         uint256 impliedCollatRatio = _debtAllocation.mul(decimalAdj).div(_lendAllocation);
         
@@ -130,8 +121,7 @@ abstract contract Token is ReentrancyGuard, Ownable, Vault {
         
     }
     
-    function setFees(uint256 _withdrawalFee, uint256 _harvestFee) external {
-        _onlyAuthorized();
+    function setFees(uint256 _withdrawalFee, uint256 _harvestFee) external onlyAuthorized {
         require(_withdrawalFee < withdrawalFeeLimit);
         require(_harvestFee < harvestFeeLimit);
         harvestFee = _harvestFee;
@@ -146,8 +136,7 @@ abstract contract Token is ReentrancyGuard, Ownable, Vault {
 
 
     /// function to deploy funds when reserves exceed some threshold
-    function deployStrat() external {
-        _onlyKeepers();
+    function deployStrat() external onlyKeepers {
         // require(msg.sender == owner, 'only admin');
         uint256 bal = base.balanceOf(address(this)); 
         uint256 totalBal = calcPoolValueInToken();
@@ -218,7 +207,7 @@ abstract contract Token is ReentrancyGuard, Ownable, Vault {
     }
 
     /// function to remove funds from strategy when users withdraws funds in excess of reserves 
-    function _withdrawSome(uint256 _amount) public {
+    function _withdrawSome(uint256 _amount) internal {
         uint256 balTotal = calcPoolValueInToken();
         uint256 balunPooled = balTotal.sub(base.balanceOf(address(this)));
         uint256 amtFromStrat = _amount.sub(base.balanceOf(address(this)));
@@ -259,16 +248,14 @@ abstract contract Token is ReentrancyGuard, Ownable, Vault {
         } 
     }
 
-    function withdrawSome(uint256 _amount) public {
-      _onlyAuthorized();
+    function withdrawSome(uint256 _amount) external onlyAuthorized {
       _withdrawSome(_amount);
     }
 
     
 
     /// below function will rebalance collateral to within target range
-    function rebalanceCollateral() external {
-        _onlyKeepers();
+    function rebalanceCollateral() external onlyKeepers {
         uint256 shortPos = balanceDebt();
         uint256 lendPos = balanceLend();
         
@@ -293,8 +280,7 @@ abstract contract Token is ReentrancyGuard, Ownable, Vault {
     }
     
     /// below function will rebalance debt vs amount of token borrowed in LP 
-    function rebalanceDebt() external {
-      _onlyKeepers();
+    function rebalanceDebt() external onlyKeepers {
       uint256 shortPos = balanceDebt(); 
       uint256 lpPos = balanceLp();
       
@@ -317,12 +303,11 @@ abstract contract Token is ReentrancyGuard, Ownable, Vault {
             _withdrawLpRebalance(baseValueAdj);
       }      
     }
-    
+
     /// called by keeper to harvest rewards and either repay debt or add to reserves 
-    function harvestStrat() external {
+    function harvestStrat() external onlyKeepers {
         
         /// harvest from farm & based on amt borrowed vs LP value either -> repay some debt or add to collateral
-        _onlyKeepers();
         farmWithdraw(farmPid(), 0); /// for spooky swap call withdraw with amt = 0
         
         if (calcDebtRatio() < decimalAdj){
@@ -345,36 +330,25 @@ abstract contract Token is ReentrancyGuard, Ownable, Vault {
     }
     
     // remove all of Vaults LP tokens and repay debt meaning vault only holds base token (in lending + reserves)
-    function exitLeveragePosition() internal {
+    function exitLeveragePosition() external onlyAuthorized {
         _withdrawAllPooled();
         _removeAllLp();
         _repayDebt(); 
         
-        if (getDebtShort() > 0){
+        if (balanceDebt() > 5){
             uint256 debtOutstanding = borrowBalanceStored(address(this));
             _swapBaseShortExact(debtOutstanding);
             _repayDebt();
 
         } else {
-            if (shortToken.balanceOf(address(this)) > 0) {
+            if (balanceShort() > 5) {
             _swapShortBase(shortToken.balanceOf(address(this))); 
             }
         }
+        
+        _redeemBase(balanceLend().sub(5));
     }
 
-    // exits all positions so vault only holds base token
-    function exitPositionsAll() external {
-        _onlyAuthorized();
-        exitLeveragePosition();
-        _redeemBase(balanceLend());
-    }
-    
-    // exits leverage position and moves all funds to lending protocal
-    function exitPositionsLP() external {
-        _onlyAuthorized();
-        exitLeveragePosition();
-        _lendBase(base.balanceOf(address(this)));
-    }
-        
+
 
 }
