@@ -7,7 +7,10 @@ import "./farms/ifarm.sol";
 import "./lenders/ilend.sol";
 
 
-abstract contract Token is ReentrancyGuard, Ownable, Vault {
+abstract contract RoboController is ReentrancyGuard, Ownable, RoboVault {
+    /// functionality allowing for Robo Vault vaults to maintain it's strategic position over time
+    /// enable users to deposit and withdraw from Robo Vault vaults
+    /// security measures to undeploy funds from strategy to vault reserves 
     using SafeERC20 for IERC20;
     using SafeMath for uint256;
     
@@ -81,7 +84,7 @@ abstract contract Token is ReentrancyGuard, Ownable, Vault {
     }
     
     /// update strategist -> this is the address that receives fees + can complete rebalancing and update strategy thresholds
-    /// strategist can also exit leveraged position i.e. withdraw all pooled LP and repay outstanding debt 
+    /// strategist can also exit leveraged position i.e. withdraw all pooled LP and repay outstanding debt moving vault funds to reserves
     function setStrategist(address _strategist) external onlyAuthorized {
         require(_strategist != address(0));
         strategist = _strategist;
@@ -141,9 +144,8 @@ abstract contract Token is ReentrancyGuard, Ownable, Vault {
     
 
 
-    /// function to deploy funds when reserves exceed some threshold
+    /// function to deploy funds when reserves exceed reserve threshold (maximum is five percent)
     function deployStrat() external onlyKeepers {
-        // require(msg.sender == owner, 'only admin');
         uint256 bal = base.balanceOf(address(this)); 
         uint256 totalBal = calcPoolValueInToken();
         uint256 reserves = totalBal.mul(reserveAllocation).div(decimalAdj);
@@ -154,7 +156,6 @@ abstract contract Token is ReentrancyGuard, Ownable, Vault {
     }
     // deploy assets according to vault strategy    
     function _deployCapital(uint256 _amount) internal {
-        // require(msg.sender == owner, 'only admin');
         uint256 lendDeposit = stratLendAllocation.mul(_amount).div(decimalAdj);
         _lendBase(lendDeposit); 
         uint256 borrowAmtBase = stratDebtAllocation.mul(_amount).div(decimalAdj); 
@@ -180,6 +181,11 @@ abstract contract Token is ReentrancyGuard, Ownable, Vault {
         shares = (_amount.mul(totalSupply())).div(pool);
       }
       _mint(msg.sender, shares);
+    }
+
+    function depositAll() public {
+        uint256 balance = base.balanceOf(msg.sender); 
+        deposit(balance); 
     }
     
     // No rebalance implementation for lower fees and faster swaps
@@ -260,7 +266,7 @@ abstract contract Token is ReentrancyGuard, Ownable, Vault {
 
     
 
-    /// below function will rebalance collateral to within target range
+    /// rebalances RoboVault strat position to within target collateral range 
     function rebalanceCollateral() external onlyKeepers {
         uint256 shortPos = balanceDebt();
         uint256 lendPos = balanceLend();
@@ -285,7 +291,7 @@ abstract contract Token is ReentrancyGuard, Ownable, Vault {
 
     }
     
-    /// below function will rebalance debt vs amount of token borrowed in LP 
+    /// rebalances RoboVault holding of short token vs LP to within target collateral range 
     function rebalanceDebt() external onlyKeepers {
       uint256 shortPos = balanceDebt(); 
       uint256 lpPos = balanceLp();

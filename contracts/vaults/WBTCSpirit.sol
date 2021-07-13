@@ -20,7 +20,7 @@ contract SpiritWBTCFTM is Spirit {
     }
 }
 
-contract rbWBTCSpirit is ERC20, ERC20Detailed, CreamWBTCFTM, SpiritWBTCFTM, Token {
+contract rbWBTCSpirit is ERC20, ERC20Detailed, CreamWBTCFTM, SpiritWBTCFTM, RoboController {
     using SafeMath for uint256;
     address constant WBTC = 0x321162Cd933E2Be498Cd2267a90534A804051b11;
     address constant WFTM = 0x21be370D5312f44cB42ce377BC9b8a0cEF1A4C83;

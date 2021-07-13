@@ -8,7 +8,8 @@ interface Icomptroller {
   function enterMarkets(address[] calldata cTokens) external returns (uint[] memory);
 }
 
-abstract contract Vault is ERC20, ERC20Detailed, ILend, IFarm {
+abstract contract RoboVault is ERC20, ERC20Detailed, ILend, IFarm {
+    /// functionality allowing Robo Vault vaults to interaction with other contracts such as lending, creating LP & harvesting rewards  
     using SafeERC20 for IERC20;
     using SafeMath for uint256;
 
@@ -118,12 +119,12 @@ abstract contract Vault is ERC20, ERC20Detailed, ILend, IFarm {
     }
 
     // lend base tokens to lending platform 
-    function _lendBase(uint256 amount) public {
+    function _lendBase(uint256 amount) internal {
         lendMint(amount);
     }
     
     // borrow tokens woth _amount of base tokens 
-    function _borrowBaseEq(uint256 _amount) public returns(uint256) {
+    function _borrowBaseEq(uint256 _amount) internal returns(uint256) {
         uint256 shortLP = _getShortInLp();
         uint256 baseLP = getBaseInLp();
         uint256 borrowamount = _amount.mul(shortLP).div(baseLP);
@@ -131,12 +132,12 @@ abstract contract Vault is ERC20, ERC20Detailed, ILend, IFarm {
         return (borrowamount);
     }
 
-    function _borrow(uint256 borrowAmount) public {
+    function _borrow(uint256 borrowAmount) internal {
         borrow(borrowAmount);
     }
     
     // automatically repays debt using any short tokens held in wallet up to total debt value
-    function _repayDebt() public {
+    function _repayDebt() internal {
         uint256 _bal = shortToken.balanceOf(address(this)); 
         uint256 _debt =  borrowBalanceStored(address(this)); 
         if (_bal < _debt){
@@ -160,7 +161,7 @@ abstract contract Vault is ERC20, ERC20Detailed, ILend, IFarm {
         return(_debt);
     }
     
-    function _getShortInLp() public view returns (uint256) {
+    function _getShortInLp() internal view returns (uint256) {
         uint256 short_lp = shortToken.balanceOf(address(lp)) ; 
         return (short_lp);          
     }
@@ -175,17 +176,17 @@ abstract contract Vault is ERC20, ERC20Detailed, ILend, IFarm {
         return (base_lp);
     }
     
-    function _getHarvestInHarvestLp() public view returns(uint256) {
+    function _getHarvestInHarvestLp() internal view returns(uint256) {
         uint256 harvest_lp = harvestToken.balanceOf(farmTokenLp());
         return harvest_lp;          
     }
     
-    function _getShortInHarvestLp() public view returns(uint256) {
+    function _getShortInHarvestLp() internal view returns(uint256) {
         uint256 shortToken_lp = shortToken.balanceOf(farmTokenLp());
         return shortToken_lp;          
     }
     
-    function _redeemBase(uint256 _redeem_amount) public {
+    function _redeemBase(uint256 _redeem_amount) internal {
         lendRedeemUnderlying(_redeem_amount); 
     }
 
@@ -218,7 +219,7 @@ abstract contract Vault is ERC20, ERC20Detailed, ILend, IFarm {
     }
     
     //  withdraws some LP worth _amount, uses withdrawn LP to add to collateral & repay debt 
-    function _withdrawLpRebalanceCollateral(uint256 _amount) public {
+    function _withdrawLpRebalanceCollateral(uint256 _amount) internal {
         uint256 lpUnpooled =  lp.balanceOf(address(this)); 
         uint256 lpPooled = countLpPooled();
         uint256 lpCount = lpUnpooled.add(lpPooled);
@@ -244,25 +245,25 @@ abstract contract Vault is ERC20, ERC20Detailed, ILend, IFarm {
         farmAddLiquidity(address(shortToken), address(base), amountADesired, amountBDesired, amountAMin, amountBMin, address(this), block.timestamp + 15); /// add liquidity 
     }
     
-    function _addToLP(uint256 _amountShort) public {
+    function _addToLP(uint256 _amountShort) internal {
         uint256 shortLP = _getShortInLp();
         uint256 baseLP = getBaseInLp();
         uint256 _amountBase = _amountShort.mul(baseLP).div(shortLP);
         _addToLpFull(_amountShort, _amountBase, _amountShort, _amountBase.mul(slippageAdj).div(decimalAdj));
     }
     
-    function _depoistLp() public {
+    function _depoistLp() internal {
         uint256 lpBalance = lp.balanceOf(address(this)); /// get number of LP tokens
         farmDeposit(farmPid(), lpBalance); /// deposit LP tokens to farm
     }
 
-    function _withdrawSomeLp(uint256 _amount) public {
+    function _withdrawSomeLp(uint256 _amount) internal {
         require(_amount <= countLpPooled());
         farmWithdraw(farmPid(), _amount);
     }
     
     // all LP currently not in Farm is removed 
-    function _removeAllLp() public {
+    function _removeAllLp() internal {
         ///require(msg.sender == owner, 'only admin'); 
         uint256 _amount = lp.balanceOf(address(this));
         uint256 shortLP = _getShortInLp();
@@ -274,14 +275,14 @@ abstract contract Vault is ERC20, ERC20Detailed, ILend, IFarm {
         farmRemoveLiquidity(address(shortToken), address(base), _amount, amountAMin, amountBMin,address(this), block.timestamp + 15);
     }
     
-    function _withdrawAllPooled() public {
+    function _withdrawAllPooled() internal {
         ///require(msg.sender == owner, 'only admin'); 
         uint256 lpPooled = countLpPooled();
         farmWithdraw(farmPid(), lpPooled);
     }
     
     // below functions interact with AMM converting Harvest Rewards & Swapping between base & short token as required for rebalancing 
-    function _sellHarvestBase() public returns (uint256) {
+    function _sellHarvestBase() internal returns (uint256) {
         address[] memory pathBase = new address[](3);
         pathBase[0] = address(harvestToken);
         pathBase[1] = address(shortToken);
@@ -299,7 +300,7 @@ abstract contract Vault is ERC20, ERC20Detailed, ILend, IFarm {
         return (amountOutMin);
     }
 
-    function _sellHarvestShort() public {
+    function _sellHarvestShort() internal {
         address[] memory pathShort = new address[](2);
         pathShort[0] = address(harvestToken);
         pathShort[1] = address(shortToken);
@@ -311,7 +312,7 @@ abstract contract Vault is ERC20, ERC20Detailed, ILend, IFarm {
         farmSwapExactTokensForTokens(harvestBalance, amountOutMin, pathShort, address(this), block.timestamp + 120);
     }
 
-    function _swapBaseShort(uint256 _amount) public {
+    function _swapBaseShort(uint256 _amount) internal {
         address[] memory pathSwap = new address[](2);
         pathSwap[0] = address(base);
         pathSwap[1] = address(shortToken);
@@ -322,7 +323,7 @@ abstract contract Vault is ERC20, ERC20Detailed, ILend, IFarm {
         farmSwapExactTokensForTokens(_amount, amountOutMin, pathSwap, address(this), block.timestamp + 120);
     }
     
-    function _swapShortBase(uint256 _amount) public {
+    function _swapShortBase(uint256 _amount) internal {
         address[] memory pathSwap = new address[](2);
         pathSwap[0] = address(shortToken);
         pathSwap[1] = address(base);
@@ -333,7 +334,7 @@ abstract contract Vault is ERC20, ERC20Detailed, ILend, IFarm {
         farmSwapExactTokensForTokens(_amount, amountOutMin, pathSwap, address(this), block.timestamp + 120);
     }
     
-    function _swapBaseShortExact(uint256 _amountOut) public {
+    function _swapBaseShortExact(uint256 _amountOut) internal {
         address[] memory pathSwap = new address[](2);
         pathSwap[0] = address(base);
         pathSwap[1] = address(shortToken);
