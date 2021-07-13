@@ -282,7 +282,10 @@ abstract contract Vault is ERC20, ERC20Detailed, ILend, IFarm {
     
     // below functions interact with AMM converting Harvest Rewards & Swapping between base & short token as required for rebalancing 
     function _sellHarvestBase() public returns (uint256) {
-        address[] memory pathBase = basePath(harvestToken, shortToken, base);
+        address[] memory pathBase = new address[](3);
+        pathBase[0] = address(harvestToken);
+        pathBase[1] = address(shortToken);
+        pathBase[2] = address(base);
         
         uint256 harvestBalance = harvestToken.balanceOf(address(this)); 
         uint256 harvestLP_A = _getHarvestInHarvestLp();

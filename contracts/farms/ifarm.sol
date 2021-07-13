@@ -10,12 +10,6 @@ abstract contract IFarm {
     function farmTokenLp() public view virtual returns (address); 
     function farmLP() public view virtual returns (address); /// LP contract for base & short token
     function farmPid() public view virtual returns (uint256); /// iquidity Pool ID
-
-    /*
-     * Farm specific methods
-     * @todo: Move to a IPaths abstract class that's vault specific
-     */
-    function basePath(IERC20 _harvestToken, IERC20 _shortToken, IERC20 _base) internal view virtual returns (address[] memory);
     
     /*
      * Farming Methods

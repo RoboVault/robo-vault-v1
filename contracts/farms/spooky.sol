@@ -37,15 +37,6 @@ abstract contract Spooky is IFarm {
     function farmTokenLp() public view override returns (address) {
         return 0xEc7178F4C41f346b2721907F5cF7628E388A7a58;
     }
-    /*
-     * Farm specific methods
-     */
-    function basePath(IERC20 _harvestToken, IERC20 _shortToken, IERC20 _base) internal view override returns (address[] memory) {
-        address[] memory pathBase = new address[](2);
-        pathBase[0] = address(_harvestToken);
-        pathBase[1] = address(_base);
-        return pathBase;
-    }
 
     /*
      * Farming Methods

@@ -39,17 +39,6 @@ abstract contract Spirit is IFarm {
     }
 
     /*
-     * Farm specific methods
-     */
-    function basePath(IERC20 _harvestToken, IERC20 _shortToken, IERC20 _base) internal view override returns (address[] memory) {
-        address[] memory pathBase = new address[](3);
-        pathBase[0] = address(_harvestToken);
-        pathBase[1] = address(_shortToken);
-        pathBase[2] = address(_base);
-        return pathBase;
-    }
-
-    /*
      * Farming Methods
      */
     function farmDeposit(uint256 _pid, uint256 _amount) internal override {
