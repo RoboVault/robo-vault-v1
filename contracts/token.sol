@@ -260,7 +260,7 @@ abstract contract RoboController is ReentrancyGuard, Ownable, RoboVault {
         } 
     }
 
-    function withdrawSome(uint256 _amount) external onlyAuthorized {
+    function undeployFromStrat(uint256 _amount) external onlyAuthorized {
       _withdrawSome(_amount);
     }
 
