@@ -27,6 +27,6 @@ contract rbUSDCSpirit is ERC20, ERC20Detailed, CreamUSDCFTM, SpiritUSDCFTM, Robo
 
     constructor() public 
         ERC20Detailed("Robo Vault USDC Spirit", "rvUSDCa", 18)
-        Token(USDC, WFTM)
+        RoboController(USDC, WFTM)
     {}
 }

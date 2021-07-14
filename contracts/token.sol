@@ -41,7 +41,7 @@ abstract contract RoboController is ReentrancyGuard, Ownable, RoboVault {
     event UpdatedKeeper(address newKeeper);
     
     constructor (address _base, address _short) public 
-        Vault(_base, _short) 
+        RoboVault(_base, _short) 
     {
     }
 
@@ -97,7 +97,7 @@ abstract contract RoboController is ReentrancyGuard, Ownable, RoboVault {
         emit UpdatedKeeper(_keeper);
     }
 
-    function setHarvestThreshold(uint256 _harvestThreshold) onlyAuthorized {
+    function setHarvestThreshold(uint256 _harvestThreshold) external onlyAuthorized {
         harvestThreshold =  _harvestThreshold;
     }
     
@@ -166,7 +166,7 @@ abstract contract RoboController is ReentrancyGuard, Ownable, RoboVault {
     
 
     // user deposits token to vault in exchange for pool shares which can later be redeemed for assets + accumulated yield
-    function deposit(uint256 _amount) external nonReentrant
+    function deposit(uint256 _amount) public nonReentrant
     {
       require(_amount > 0, "deposit must be greater than 0");
       uint256 pool = calcPoolValueInToken();

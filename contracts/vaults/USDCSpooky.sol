@@ -27,6 +27,6 @@ contract rbUSDCSpooky is ERC20, ERC20Detailed, CreamUSDCFTM, SpookyUSDCFTM, Robo
 
     constructor() public 
         ERC20Detailed("Robo Vault USDC Spooky", "rvUSDCb", 18)
-        Token(USDC, WFTM)
+        RoboController(USDC, WFTM)
     {}
 }

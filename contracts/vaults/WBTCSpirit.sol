@@ -27,6 +27,6 @@ contract rbWBTCSpirit is ERC20, ERC20Detailed, CreamWBTCFTM, SpiritWBTCFTM, Robo
 
     constructor() public 
         ERC20Detailed("Robo Vault WBTC Spirit", "rvWBTCa", 18)
-        Token(WBTC, WFTM)
+        RoboController(WBTC, WFTM)
     {}
 }

@@ -27,6 +27,6 @@ contract rbWBTCSpooky is ERC20, ERC20Detailed, CreamWBTCFTM, SpookyWBTCFTM, Robo
 
     constructor() public 
         ERC20Detailed("Robo Vault WBTC Spooky", "rvWBTCb", 18)
-        Token(WBTC, WFTM)
+        RoboController(WBTC, WFTM)
     {}
 }
