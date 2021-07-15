@@ -1,149 +1,201 @@
-pragma solidity ^0.5.0;
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.6.12;
 
-
-import "./vaultFtm.sol";
+import "./vault.sol";
 import "./vaultHelpers.sol";
+import "./farms/ifarm.sol";
+import "./lenders/ilend.sol";
 
 
-/*
-interface IIEarnManager {
-    function recommend(address _token) external view returns (
-      string memory choice,
-      uint256 capr,
-      uint256 iapr,
-      uint256 aapr,
-      uint256 dapr
-    );
-}
-
-contract Structs {
-    struct Val {
-        uint256 value;
-    }
-
-    enum ActionType {
-        Deposit,   // supply tokens
-        Withdraw  // borrow tokens
-    }
-
-    enum AssetDenomination {
-        Wei // the amount is denominated in wei
-    }
-
-    enum AssetReference {
-        Delta // the amount is given as a delta from the current value
-    }
-
-    struct AssetAmount {
-        bool sign; // true if positive
-        AssetDenomination denomination;
-        AssetReference ref;
-        uint256 value;
-    }
-
-    struct ActionArgs {
-        ActionType actionType;
-        uint256 accountId;
-        AssetAmount amount;
-        uint256 primaryMarketId;
-        uint256 secondaryMarketId;
-        address otherAddress;
-        uint256 otherAccountId;
-        bytes data;
-    }
-
-    struct Info {
-        address owner;  // The address that owns the account
-        uint256 number; // A nonce that allows a single address to control many accounts
-    }
-
-    struct Wei {
-        bool sign; // true if positive
-        uint256 value;
-    }
-}
-*/
-
-
-contract rvUSDC is ERC20, ERC20Detailed, ReentrancyGuard, Ownable, vault {
+abstract contract RoboController is ReentrancyGuard, Ownable, RoboVault {
+    /// functionality allowing for Robo Vault vaults to maintain it's strategic position over time
+    /// enable users to deposit and withdraw from Robo Vault vaults
+    /// security measures to undeploy funds from strategy to vault reserves 
     using SafeERC20 for IERC20;
     using SafeMath for uint256;
     
-    uint256 public pool;
-    
-    uint256 lendAllocation = 70;
-    uint256 borrowAllocation = 30; 
-    
-    /// free cash held in base currency as % for speedy withdrawals 
-    uint256 freeCashAllocation = 5; 
-    /// upper, target and lower bounds for ratio of debt to collateral 
-    uint256 collatUpper = 50; 
-    uint256 collatTarget = 42 ;
-    uint256 collatLower = 35;  
-    uint256 debtBuffer = 3; /// buffer of % difference between debt position and LP before rebalance
-    
-    
-    constructor () public ERC20Detailed("vault USDC", "rvUSDC", 18) {
-        address _owner = msg.sender;
+    address public strategist = 0xD074CDae76496d81Fab83023fee4d8631898bBAf;
+    address public keeper = 0x7642604866B546b8ab759FceFb0C5c24b296B925;
+    /// default allocations, thresholds & fees
+    uint256 public stratLendAllocation = 650000;
+    uint256 public stratDebtAllocation = 350000; 
+    uint256 public collatUpper = 600000; 
+    uint256 public collatTarget = 530000;
+    uint256 public collatLower = 450000;  
+    uint256 public debtUpper = 1030000;
+    uint256 public debtLower = 970000;
+    uint256 public harvestFee = 50000;
+    uint256 public withdrawalFee = 5000;
+    uint256 public reserveAllocation = 50000;
+    uint256 public harvestThreshold = 1000000;
 
+
+    // protocal limits & upper, target and lower thresholds for ratio of debt to collateral 
+    uint256 constant collatLimit = 750000;
+    // upper limit for fees so owner cannot maliciously increase fees
+    uint256 constant harvestFeeLimit = 50000;
+    uint256 constant withdrawalFeeLimit = 5000; // only applies when funds are removed from strat & not reserves
+    uint256 constant reserveAllocationLimit =  50000; 
+
+    event UpdatedStrategist(address newStrategist);
+    event UpdatedKeeper(address newKeeper);
     
+    constructor (address _base, address _short) public 
+        RoboVault(_base, _short) 
+    {
+    }
+
+    // modifiers 
+    modifier onlyAuthorized() {
+        require(msg.sender == strategist || msg.sender == owner());
+        _;
+    }
+
+    modifier onlyKeepers() {
+        require(msg.sender == keeper || msg.sender == strategist || msg.sender == owner());
+        _;
     }
     
-    function deploy_strat() public {
-        ///require(msg.sender == owner, 'only admin');
+    /// before withdrawing from strat check there is enough liquidity in lending protocal 
+    function _liquidityCheck(uint256 _amount) internal view {
+        uint256 lendBal = getBaseInLending();
+        require(lendBal > _amount, "CREAM Currently has insufficent liquidity of base token to complete withdrawal.");
+        
+        
+    }
+    
+    function approveContracts() external onlyAuthorized {
+        base.safeApprove(lendPlatform(), uint256(-1));
+        shortToken.safeApprove(borrowPlatform(), uint256(-1));
+        base.safeApprove(routerAddress(), uint256(-1));
+        shortToken.safeApprove(routerAddress(), uint256(-1));
+        harvestToken.safeApprove(routerAddress(), uint256(-1));
+        lp.safeApprove(routerAddress(), uint256(-1));
+        lp.approve(farmAddress(), uint256(-1));
+    }
+        
+    function resetApprovals( ) external onlyAuthorized {
+        base.safeApprove(lendPlatform(), 0);
+        shortToken.safeApprove(borrowPlatform(), 0);
+        base.safeApprove(routerAddress(), 0);
+        shortToken.safeApprove(routerAddress(), 0);
+        harvestToken.safeApprove(routerAddress(), 0);
+        lp.safeApprove(routerAddress(), 0);
+    }
+    
+    /// update strategist -> this is the address that receives fees + can complete rebalancing and update strategy thresholds
+    /// strategist can also exit leveraged position i.e. withdraw all pooled LP and repay outstanding debt moving vault funds to reserves
+    function setStrategist(address _strategist) external onlyAuthorized {
+        require(_strategist != address(0));
+        strategist = _strategist;
+        emit UpdatedStrategist(_strategist);
+    }
+    /// keeper has ability to copmlete rebalancing functions & also deploy capital to strategy once reserves exceed some threshold
+    function setKeeper(address _keeper) external onlyAuthorized {
+        require(_keeper != address(0));
+        keeper = _keeper;
+        emit UpdatedKeeper(_keeper);
+    }
+
+    function setHarvestThreshold(uint256 _harvestThreshold) external onlyAuthorized {
+        harvestThreshold =  _harvestThreshold;
+    }
+    
+    function setDebtThresholds(uint256 _lower, uint256 _upper) external onlyAuthorized {
+        require(_lower < decimalAdj);
+        require(_upper > decimalAdj);
+        debtUpper = _upper;
+        debtLower = _lower;
+    }
+    
+    function setCollateralThresholds(uint256 _lower, uint256 _upper, uint256 _target) external onlyAuthorized {
+        require(collatLimit > _upper);
+        require(_upper > _target);
+        require(_target > _lower);
+        collatUpper = _upper; 
+        collatTarget = _target ;
+        collatLower = _lower;
+    }
+    
+    function setFundingAllocations(uint256 _reserveAllocation, uint256 _lendAllocation) external onlyAuthorized {
+
+        uint256 _debtAllocation = decimalAdj.sub(_lendAllocation); 
+        uint256 impliedCollatRatio = _debtAllocation.mul(decimalAdj).div(_lendAllocation);
+        
+        require(_reserveAllocation < reserveAllocationLimit); 
+        require(impliedCollatRatio < collatLimit);
+        reserveAllocation = _reserveAllocation;
+        stratLendAllocation = _lendAllocation;
+        stratDebtAllocation = _debtAllocation; 
+        
+    }
+    
+    function setFees(uint256 _withdrawalFee, uint256 _harvestFee) external onlyAuthorized {
+        require(_withdrawalFee < withdrawalFeeLimit);
+        require(_harvestFee < harvestFeeLimit);
+        harvestFee = _harvestFee;
+        withdrawalFee = _withdrawalFee; 
+    }
+    /// this is the withdrawl fee when user withdrawal results in removal of funds from strategy (i.e. withdrawal in excess of reserves)
+    function _calcWithdrawalFee(uint256 _r) internal view returns(uint256) {
+        uint256 _fee = _r.mul(withdrawalFee).div(decimalAdj);
+        return(_fee);
+    }
+    
+
+
+    /// function to deploy funds when reserves exceed reserve threshold (maximum is five percent)
+    function deployStrat() external onlyKeepers {
         uint256 bal = base.balanceOf(address(this)); 
         uint256 totalBal = calcPoolValueInToken();
-        uint256 freeCash = totalBal.mul(freeCashAllocation).div(100);
-        if (bal > freeCash){
-            _deploy_capital(bal.sub(freeCash));
+        uint256 reserves = totalBal.mul(reserveAllocation).div(decimalAdj);
+        if (bal > reserves){
+            _deployCapital(bal.sub(reserves));
         }
         
     }
-        
-    function _deploy_capital(uint256 _amount) internal {
-        ///require(msg.sender == owner, 'only admin');
-        ///uint256 bal = base.balanceOf(address(this)); 
-        uint256 lendDeposit = lendAllocation.mul(_amount).div(100);
+    // deploy assets according to vault strategy    
+    function _deployCapital(uint256 _amount) internal {
+        uint256 lendDeposit = stratLendAllocation.mul(_amount).div(decimalAdj);
         _lendBase(lendDeposit); 
-        uint256 borrow_amt_base = borrowAllocation.mul(_amount).div(100); 
-        uint256 borrow_amt = _borrow_base_eq(borrow_amt_base);
-        _add_to_LP(borrow_amt);
-        depoistLp();
+        uint256 borrowAmtBase = stratDebtAllocation.mul(_amount).div(decimalAdj); 
+        uint256 borrowAmt = _borrowBaseEq(borrowAmtBase);
+        _addToLP(borrowAmt);
+        _depoistLp();
     }
     
-    function approveBase(uint256 _amount) external {
-        IERC20(base).approve(address(this), _amount);
-    }
 
-    function deposit(uint256 _amount) external nonReentrant
+    // user deposits token to vault in exchange for pool shares which can later be redeemed for assets + accumulated yield
+    function deposit(uint256 _amount) public nonReentrant
     {
       require(_amount > 0, "deposit must be greater than 0");
-      pool = calcPoolValueInToken();
+      uint256 pool = calcPoolValueInToken();
     
       base.transferFrom(msg.sender, address(this), _amount);
     
       // Calculate pool shares
       uint256 shares = 0;
-      if (pool == 0) {
-        shares = _amount.div(100);
-        pool = _amount;
+      if (totalSupply() == 0) {
+        shares = _amount;
       } else {
         shares = (_amount.mul(totalSupply())).div(pool);
       }
-      pool = calcPoolValueInToken();
       _mint(msg.sender, shares);
+    }
+
+    function depositAll() public {
+        uint256 balance = base.balanceOf(msg.sender); 
+        deposit(balance); 
     }
     
     // No rebalance implementation for lower fees and faster swaps
-    function withdraw(uint256 _shares) external nonReentrant
+    function withdraw(uint256 _shares) public nonReentrant
     {
       require(_shares > 0, "withdraw must be greater than 0");
-    
+      
       uint256 ibalance = balanceOf(msg.sender);
       require(_shares <= ibalance, "insufficient balance");
-    
-      // Could have over value from cTokens
-      pool = calcPoolValueInToken();
+      uint256 pool = calcPoolValueInToken();
       // Calc to redeem before updating balances
       uint256 r = (pool.mul(_shares)).div(totalSupply());
       _burn(msg.sender, _shares);
@@ -151,20 +203,34 @@ contract rvUSDC is ERC20, ERC20Detailed, ReentrancyGuard, Ownable, vault {
       // Check balance
       uint256 b = IERC20(base).balanceOf(address(this));
       if (b < r) {
+        // take withdrawal fee for removing from strat 
+        uint256 fee = _calcWithdrawalFee(r);
+        r = r.sub(fee);
         _withdrawSome(r);
       }
     
       IERC20(base).safeTransfer(msg.sender, r);
-      pool = calcPoolValueInToken();
     }
     
-    function _withdrawSome(uint256 _amount) public {
-        require(_amount < calcPoolValueInToken());
-        uint256 amt_from_lp = _amount.sub(base.balanceOf(address(this))).mul(borrowAllocation).div(50); 
-        uint256 lpValue = balanceLp(); 
+    function withdrawAll() public {
+        uint256 ibalance = balanceOf(msg.sender);
+        withdraw(ibalance);
+        
+    }
+
+    /// function to remove funds from strategy when users withdraws funds in excess of reserves 
+    function _withdrawSome(uint256 _amount) internal {
+        uint256 balTotal = calcPoolValueInToken();
+        uint256 balunPooled = balTotal.sub(base.balanceOf(address(this)));
+        uint256 amtFromStrat = _amount.sub(base.balanceOf(address(this)));
+        
+        
+        require(_amount <= calcPoolValueInToken());
+        uint256 stratPercent = amtFromStrat.mul(decimalAdj).div(balunPooled);
+        uint256 lpPooled = countLpPooled();
         uint256 lpUnpooled =  lp.balanceOf(address(this)); 
         uint256 lpCount = lpUnpooled.add(lpPooled);
-        uint256 lpReq = amt_from_lp.mul(lpCount).div(balanceLp()); 
+        uint256 lpReq = lpCount.mul(stratPercent).div(decimalAdj); 
         uint256 lpWithdraw;
         if (lpReq - lpUnpooled < lpPooled){
             lpWithdraw = lpReq - lpUnpooled;
@@ -173,93 +239,128 @@ contract rvUSDC is ERC20, ERC20Detailed, ReentrancyGuard, Ownable, vault {
         }
         _withdrawSomeLp(lpWithdraw);
         _removeAllLp(); 
-        _repay_debt(); 
+        _repayDebt(); 
+
         uint256 redeemAmount = _amount - base.balanceOf(address(this)); 
-        _redeem_base(redeemAmount);
+        
+        // need to add a check for collateral ratio after redeeming 
+        uint256 postRedeemCollateral = (balanceDebt()).mul(decimalAdj).div(balanceLend().sub(redeemAmount));
+        if (postRedeemCollateral < collatLimit){
+            _redeemBase(redeemAmount);
+        }
+        else {
+            uint256 subAmt = collatUpper.mul(balanceLend().sub(redeemAmount));
+            uint256 numerator = balanceDebt().mul(decimalAdj).sub(subAmt);
+            uint256 denominator = decimalAdj.sub(collatUpper); 
+            
+            _swapBaseShortExact(numerator.div(denominator)); 
+            _repayDebt();
+            redeemAmount = _amount - base.balanceOf(address(this));
+            _redeemBase(redeemAmount);
+        } 
     }
+
+    function undeployFromStrat(uint256 _amount) external onlyAuthorized {
+      _withdrawSome(_amount);
+    }
+
     
 
-    /// below function will rebalance collateral to within target range
-    function rebalanceCollateral() public {
-      
-        uint256 shortPos = balanceDebt(); 
-        uint256 lendPos = balanceLend(); 
-        uint256 totalBal = calcPoolValueInToken(); 
-        uint256 lpBal = balanceLp(); 
+    /// rebalances RoboVault strat position to within target collateral range 
+    function rebalanceCollateral() external onlyKeepers {
+        uint256 shortPos = balanceDebt();
+        uint256 lendPos = balanceLend();
         
-        /// ratio of amount borrowed to collateral 
-        uint256 collatRat = shortPos.div(lendPos).mul(100); 
+        // ratio of amount borrowed to collateral 
+        uint256 collatRat = calcCollateral(); 
         
         if (collatRat > collatUpper) {
-            uint256 adjAmount = (shortPos.sub(lendPos.mul(collatTarget).div(100))).div(100+collatTarget).mul(100);
+            uint256 adjAmount = (shortPos.sub(lendPos.mul(collatTarget).div(decimalAdj))).mul(decimalAdj).div(decimalAdj.add(collatTarget));
             /// remove some LP use 50% of withdrawn LP to repay debt and half to add to collateral 
             _withdrawLpRebalanceCollateral(adjAmount.mul(2));
             
         }
         
         if (collatRat < collatLower) {
-            uint256 adjAmount = (lendPos.mul(collatTarget).div(100).sub(shortPos)).div(100+collatTarget).mul(100);
-            uint256 borrow_amt = _borrow_base_eq(adjAmount);
-            _redeem_base(adjAmount);
-            _add_to_LP(borrow_amt);
-            depoistLp();
+            uint256 adjAmount = ((lendPos.mul(collatTarget).div(decimalAdj)).sub(shortPos)).mul(decimalAdj).div(decimalAdj.add(collatTarget));
+            uint256 borrowAmt = _borrowBaseEq(adjAmount);
+            _redeemBase(adjAmount);
+            _addToLP(borrowAmt);
+            _depoistLp();
         }
 
     }
     
-    /// below function will rebalance debt vs amount of token borrowed in LP 
-    function rebalanceDebt() public {
+    /// rebalances RoboVault holding of short token vs LP to within target collateral range 
+    function rebalanceDebt() external onlyKeepers {
       uint256 shortPos = balanceDebt(); 
       uint256 lpPos = balanceLp();
       
-      if (lpPos.div(2) > shortPos.mul(100 + debtBuffer).div(100)){
-            /// amount of short token in LP is greater than amount borrowed -> 
-            /// action = borrow more short token swap half for base token and add to LP + farm
-            uint256 borrow_amt_base = lpPos - shortPos.mul(2);
-            uint256 borrow_amt = _borrow_base_eq(borrow_amt_base);
-            _swap_short_for_base(borrow_amt.div(2));
-            _add_to_LP(borrow_amt.div(2));
-            depoistLp();
+      if (calcDebtRatio() < debtLower){
+            // amount of short token in LP is greater than amount borrowed -> 
+            // action = borrow more short token swap half for base token and add to LP + farm
+            uint256 borrowAmtBase = lpPos.sub(shortPos.mul(2));
+            uint256 borrowAmt = _borrowBaseEq(borrowAmtBase);
+            _swapShortBase(borrowAmt.div(2));
+            _addToLP(borrowAmt.div(2));
+            _depoistLp();
     
     
       }
       
-      if (lpPos.div(2) < shortPos.mul(100 - debtBuffer).div(100)){
-            /// amount of short token in LP is less than amount borrowed -> 
-            /// action = remove some LP -> repay debt + add base token to collateral 
-            uint256 baseValueAdj = shortPos.mul(2) - lpPos;
+      if (calcDebtRatio() > debtUpper){
+            // amount of short token in LP is less than amount borrowed -> 
+            // action = remove some LP -> repay debt + add base token to collateral 
+            uint256 baseValueAdj = (shortPos.mul(2)).sub(lpPos);
             _withdrawLpRebalance(baseValueAdj);
-    
-      }
-    
-      
+      }      
+    }
+
+    /// called by keeper to harvest rewards and either repay debt or add to reserves 
+    function harvestStrat() external onlyKeepers {
+        
+        /// harvest from farm & based on amt borrowed vs LP value either -> repay some debt or add to collateral
+        farmWithdraw(farmPid(), 0); /// for spooky swap call withdraw with amt = 0
+        
+        if (calcDebtRatio() < harvestThreshold){
+            uint256 lendAdd = _sellHarvestBase();
+            uint256 fee = lendAdd.mul(harvestFee).div(decimalAdj);
+            base.safeTransfer(strategist, fee);            
+        } else {
+            _sellHarvestShort(); 
+            uint256 fee = shortToken.balanceOf(address(this)).mul(harvestFee).div(decimalAdj);
+            shortToken.safeTransfer(strategist, fee);
+            _repayDebt();
+        }
+        
     }
     
     function getPricePerFullShare() public view returns(uint256) {
         uint256 bal = calcPoolValueInToken();
         uint256 supply = totalSupply();
-        return bal.div(supply);
-        
+        return bal.mul(decimalAdj).div(supply);
     }
-    /*
-    function removeShortPosition() internal {
-          
-        /// withdraws all LP from farm -> converts to tokens -> repays debt -> if still outstanding debt converts some of base token to short token & repays -> 
-          
+    
+    // remove all of Vaults LP tokens and repay debt meaning vault only holds base token (in lending + reserves)
+    function exitLeveragePosition() external onlyAuthorized {
         _withdrawAllPooled();
         _removeAllLp();
-        _repay_debt(); 
+        _repayDebt(); 
         
-        if (balanceDebt() > 0){
-            _swap_base_for_short(balanceDebt());
-            _repay_debt();
-            /// still some debt to repay afetr removing LP 
-            
+        if (balanceDebt() > 5){
+            uint256 debtOutstanding = borrowBalanceStored(address(this));
+            _swapBaseShortExact(debtOutstanding);
+            _repayDebt();
+
         } else {
-            _swap_short_for_base(short_token.balanceOf(address(this))); 
+            if (balanceShort() > 5) {
+            _swapShortBase(shortToken.balanceOf(address(this))); 
+            }
         }
+        
+        _redeemBase(balanceLend().sub(5));
     }
-    */
-    
+
+
 
 }
