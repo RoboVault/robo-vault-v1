@@ -264,7 +264,6 @@ abstract contract RoboVault is ERC20, ERC20Detailed, ILend, IFarm {
     
     // all LP currently not in Farm is removed 
     function _removeAllLp() internal {
-        ///require(msg.sender == owner, 'only admin'); 
         uint256 _amount = lp.balanceOf(address(this));
         uint256 shortLP = _getShortInLp();
         uint256 baseLP = getBaseInLp();
@@ -276,7 +275,6 @@ abstract contract RoboVault is ERC20, ERC20Detailed, ILend, IFarm {
     }
     
     function _withdrawAllPooled() internal {
-        ///require(msg.sender == owner, 'only admin'); 
         uint256 lpPooled = countLpPooled();
         farmWithdraw(farmPid(), lpPooled);
     }
