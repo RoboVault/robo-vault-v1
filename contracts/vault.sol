@@ -196,7 +196,7 @@ abstract contract RoboVault is ERC20, ERC20Detailed, ILend, IFarm {
     }
     
     // withdraws some LP worth _amount, converts all withdrawn LP to short token to repay debt 
-    function _withdrawLpRebalance(uint256 _amount) public {
+    function _withdrawLpRebalance(uint256 _amount) internal {
         uint256 lpUnpooled =  lp.balanceOf(address(this)); 
         uint256 lpPooled = countLpPooled();
         uint256 lpCount = lpUnpooled.add(lpPooled);
